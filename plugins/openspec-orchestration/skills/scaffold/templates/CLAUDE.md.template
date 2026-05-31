@@ -1,0 +1,120 @@
+<!--
+  TEMPLATE: orchestrator CLAUDE.md (OpenSpec Apply Workflow)
+  Fill every {{PLACEHOLDER}} from the repo audit, then DELETE all <!-- ... --> comments.
+  Keep the "# OpenSpec Apply Workflow" section structure intact — it is the load-bearing part.
+  Adjust the gate list and commit footer to match the project's real build commands.
+-->
+# {{PROJECT_NAME}}
+
+{{PROJECT_DESCRIPTION}}
+<!-- 1-2 sentences: what this project is, its tech stack, and (if it has a consumer/sibling)
+     how it relates to it. Mine this from openspec/project.md and the specs. -->
+
+Spec-driven development is managed with **OpenSpec** (`openspec/`). All feature work flows through a
+change in `openspec/changes/`.
+
+### Where to look for historical context on a shipped change
+
+The OpenSpec archive (`openspec/changes/archive/YYYY-MM-DD-<name>/`) contains the spec deltas for every
+shipped change. Alongside `proposal.md` / `design.md` / `specs/**/*.md` / `tasks.md` there may also be a
+**`DEVLOG.md`** — a working note the orchestrator kept while the change was applied: per-{{UNIT}} status,
+decisions made under uncertainty, deviations, bugs surfaced, and human-in-the-loop verifications. When a
+session needs context on *how* a prior change was built (not just *what* it specified), read the archived
+`DEVLOG.md`. Active changes keep a `DEVLOG.md` in the change directory while in-flight; it moves to the
+archive with the change.
+
+### Commands
+
+- Build: `{{BUILD_CMD}}` — must be clean.
+- Test: `{{TEST_CMD}}` — all green.
+{{FORMAT_COMMAND_LINE}}<!-- e.g. "- Format: `dotnet format --verify-no-changes` — clean." Delete this line if the project has no format gate. -->
+- Validate a change: `openspec validate <change-name> --strict`.
+- List changes: `openspec list` (or the directories under `openspec/changes/`, excluding `archive/`).
+
+---
+
+# OpenSpec Apply Workflow
+
+**This section is authoritative.** `/opsx:apply` is the entry point for implementing a change; if the
+skill's behavior ever conflicts with what's written here, **follow this document**.
+
+## Roles — the main thread never writes feature code
+
+- **Orchestrator** = the main thread (you). You read specs, select work, brief agents, run the gates,
+  tick boxes, and commit. **You do not implement feature code directly.**
+- **`worker`** agent — implements the tasks.
+- **`reviewer`** agent — audits the worker's diff.
+
+Both agents are defined for this repo. Delegate; don't shortcut by writing the implementation yourself.
+
+## 1. Select the change
+
+1. List active changes = directories in `openspec/changes/` **excluding `archive/`**.
+2. **Always ask the user which change to apply**, even when there is exactly one. If there are none,
+   say so and stop.
+3. Resume point = the **first unticked `- [ ]` task** in that change's `tasks.md`.
+
+## 2. Pre-flight (orchestrator, before any {{UNIT}})
+
+1. Read `proposal.md`, `design.md`, and the relevant `specs/<capability>/spec.md` for the {{UNIT}}(s)
+   you're about to work.
+2. **Working tree must be clean** (`git status`). If it's dirty, stop and ask.
+3. **Change must validate**: `openspec validate <change-name> --strict`. If it doesn't, stop and ask.
+4. **Be on the change branch** `change/<change-name>`. Create it from the default branch if missing:
+   `git switch -c change/<change-name>`.
+
+## 3. Implement — {{UNIT}} by {{UNIT}}
+
+The unit of work is a **`## N.` {{UNIT}}**. Walk {{UNIT}}s in order from the resume point. For each:
+
+1. **Brief the worker.** Hand it: the {{UNIT}}'s tasks (`N.1`…`N.k`), the relevant spec excerpts, the
+   {{DECISIONS_NOUN}} that bind them, and the done-gates below. The worker should not need to go
+   hunting — give it what it needs to stay focused.
+2. **Worker implements the whole {{UNIT}}.** If it's large or complex, split it into sub-chunks across
+   multiple `worker` calls — but it remains **one commit at {{UNIT}} end**.
+3. **Audit.** Spawn `reviewer` on the {{UNIT}} diff (correctness, {{COMPLIANCE_NOUN}} compliance,
+   OpenSpec scope, {{LANG}} idiom, {{DOMAIN_QUALITY}}).
+4. **Review loop.** Feed the reviewer's findings back to the `worker`; worker fixes; `reviewer`
+   re-audits. **Repeat until the reviewer signs off.**
+5. **Gates — all must pass before ticking any box:**
+   - `{{BUILD_CMD}}` clean (no errors)
+   - `{{TEST_CMD}}` green — new tests for the {{UNIT}} **and** all existing tests
+   - `openspec validate <change-name> --strict`
+{{FORMAT_GATE_LINE}}<!-- e.g. "   - `dotnet format --verify-no-changes` clean" — delete if no format gate -->
+   If a gate fails, it's back to step 4, not a commit.
+6. **Tick the boxes.** Mark every `- [x] N.M` in the {{UNIT}} in `tasks.md`.
+7. **Commit — one conventional commit per {{UNIT}}:**
+   ```
+   feat(<change-name>): <{{UNIT}} title> ({{UNIT}} N)
+
+   - N.1 <task summary>
+   - N.2 <task summary>
+   ...
+
+   {{COAUTHOR_LINE}}
+   ```
+
+## 4. Stop and ask — do not push on
+
+Stop **immediately** and ask the user (do not improvise a fix) when:
+
+- a spec/design is **ambiguous**, or two specs **contradict** each other;
+- doing the task properly needs changes **outside this change's scope** (its proposal/specs);
+- a task is **blocked by an unresolved Open Question** in `design.md`;
+- implementation or tests reveal the **spec itself is wrong** (not just the code);
+- a task **requires human-in-the-loop verification** that can't be settled by automated gates — e.g.
+  {{HITL_EXAMPLES}}. Implement and self-test as far as possible, then hand the user a precise,
+  copy-pasteable way to verify (exact command, what to do, what they should see) and **wait for their
+  confirmation before ticking that task**.
+
+**On stopping mid-{{UNIT}}:** leave the WIP **uncommitted**, do **not** tick the {{UNIT}}, do **not**
+revert. Report the **exact task (`N.M`)** that stopped you and why. The WIP stays in the working tree
+for the user to inspect.
+
+## 5. Done
+
+When every task in the change is ticked and the final review is clean:
+
+1. Report status: {{UNIT}}s completed, commits made, test summary.
+2. **Propose archiving** — offer to run `/opsx:archive` and **wait for the user's confirmation**.
+   Do not archive automatically.

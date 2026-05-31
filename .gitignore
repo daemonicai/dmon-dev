@@ -1,0 +1,17 @@
+# Local Claude Code state (machine-specific permissions, not for sharing)
+.claude/settings.local.json
+
+# macOS
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Node (in case a plugin grows tooling)
+node_modules/
+npm-debug.log*
+
+# Logs / scratch
+*.log
