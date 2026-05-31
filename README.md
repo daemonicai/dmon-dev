@@ -7,7 +7,7 @@ A Claude Code plugin marketplace for the **dmon** family of repos (`dcli`, `dmon
 
 | Plugin | What it does |
 |--------|--------------|
-| [`openspec-orchestration`](plugins/openspec-orchestration) | Scaffolds the OpenSpec Apply Workflow into a repo — generates a tailored orchestrator `CLAUDE.md` plus `worker` and `reviewer` subagents by auditing the repo's openspec specs and changes. |
+| [`dmons`](plugins/dmons) | Scaffolds the OpenSpec Apply Workflow into a repo — generates a tailored orchestrator `CLAUDE.md` plus `worker` and `reviewer` subagents by auditing the repo's openspec specs and changes. |
 
 ## Install
 
@@ -19,13 +19,13 @@ From any Claude Code session:
 # or, once pushed:  /plugin marketplace add <git-owner>/<repo>
 
 # Install the plugin
-/plugin install openspec-orchestration@dmon-cc
+/plugin install dmons@dmon-cc
 ```
 
 Then, in a target repo that already has `openspec/` set up:
 
 ```
-/openspec-orchestration:scaffold
+/dmons:scaffold
 ```
 
 The skill audits the repo's specs and changes and writes `CLAUDE.md`, `.claude/agents/worker.md`, and
@@ -39,7 +39,7 @@ dmon-cc/
 ├── .claude-plugin/
 │   └── marketplace.json          # marketplace manifest (lists plugins)
 └── plugins/
-    └── openspec-orchestration/
+    └── dmons/
         ├── .claude-plugin/
         │   └── plugin.json        # plugin manifest
         ├── skills/

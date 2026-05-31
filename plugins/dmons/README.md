@@ -1,4 +1,4 @@
-# openspec-orchestration
+# dmons
 
 Scaffolds the **OpenSpec Apply Workflow** into a repo. It generates three repo-local files, each tailored
 to the project by auditing its OpenSpec specs and changes:
@@ -21,7 +21,7 @@ drives them via the `worker`/`reviewer` split.
 In a repo that already has `openspec/` with at least one change:
 
 ```
-/openspec-orchestration:scaffold
+/dmons:scaffold
 ```
 
 The skill:
