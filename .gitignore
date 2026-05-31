@@ -15,3 +15,8 @@ npm-debug.log*
 
 # Logs / scratch
 *.log
+
+# openspec CLI artifacts (not part of the marketplace)
+openspec/
+.claude/commands/
+.claude/skills/
