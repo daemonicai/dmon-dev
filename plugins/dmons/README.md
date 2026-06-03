@@ -1,5 +1,12 @@
 # dmons
 
+OpenSpec workflow tooling. The plugin ships two skills:
+
+- **`/dmons:scaffold`** — scaffolds the OpenSpec Apply Workflow into a repo (details below).
+- **`/devlog`** — maintains a `DEVLOG.md` narrative alongside a change's `tasks.md` (see [Devlog](#devlog)).
+
+## Scaffold
+
 Scaffolds the **OpenSpec Apply Workflow** into a repo. It generates three repo-local files, each tailored
 to the project by auditing its OpenSpec specs and changes:
 
@@ -39,3 +46,18 @@ The templates are annotated skeletons distilled from the hand-tuned agents acros
 `dmon-meko`, and `dmon-websearch`: a shared structure with `{{PLACEHOLDER}}` slots for the parts that
 genuinely differ per repo (tech stack, build gates, binding decisions, domain hazards, HITL examples).
 The skill fills the slots from the audit and strips the scaffolding.
+
+## Devlog
+
+`tasks.md` is a checklist — it records *what* and *whether done*. `DEVLOG.md` is the companion narrative —
+it records *how* and *why*: implementation details, decisions and their reasons, and what to do next. It
+lives next to `tasks.md` at `openspec/changes/<change-name>/DEVLOG.md`.
+
+```
+/devlog
+```
+
+The skill locates the active change (via `openspec list --json`, or a name you pass), then appends bullets
+under the matching `## N. <group>` heading from `tasks.md` and rewrites a pinned `## NEXT` section carrying
+forward the next work and any open questions. Use it after completing a task group during an apply, or
+whenever you want to record a decision and its rationale.
