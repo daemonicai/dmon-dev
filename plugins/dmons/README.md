@@ -1,9 +1,45 @@
 # dmons
 
-OpenSpec workflow tooling. The plugin ships two skills:
+OpenSpec workflow tooling. The plugin ships four skills:
 
+- **`/dmons:discovery`** — the greenfield front door: gather initial requirements from the Product Owner as the Analyst, with zero tech assumptions, then hand off to `opsx:explore` (see [Discovery](#discovery)).
+- **`/dmons:architecture`** — decide the *how* as the Architect: platform, language, frameworks, hosting — the choices discovery deferred — then hand off to `opsx:propose` (see [Architecture](#architecture)).
 - **`/dmons:scaffold`** — scaffolds the OpenSpec Apply Workflow into a repo (details below).
 - **`/devlog`** — maintains a change's `DEVLOG.md`, the shared channel its agents talk through (see [Devlog](#devlog)).
+
+Together, `discovery` → `architecture` → `scaffold` walk a greenfield project from an empty repo through
+requirements (the *what*), technology decisions (the *how*), and the Apply Workflow agents that build it.
+
+## Discovery
+
+The step *before* there is anything to build. On an empty, OpenSpec-initialized repo with **no open or
+archived changes**, `/dmons:discovery` casts the main thread as the **Analyst** and the user as the
+**Product Owner**, and gathers the project's initial requirements — *what* and *why* — while assuming
+**nothing** about the *how*: no tech stack, language, platform, hosting, framework, or library. All of
+that stays open until the requirements are set. When the requirements hold together it hands off to
+`opsx:explore` to record them, then points the Product Owner at `/opsx:propose` (where the Architect
+decides the *how*) and `/dmons:scaffold`. For a repo that already has changes or code, use `opsx:explore`
+directly — discovery is greenfield-only.
+
+```
+/dmons:discovery
+```
+
+## Architecture
+
+The step *after* discovery and the inverse of it. Where the Analyst assumed nothing, the **Architect**
+now makes the technology decisions discovery deferred — **platform, language(s), frameworks/libraries,
+datastore, hosting, tooling** — each argued against the captured requirements. The Architect is
+**opinionated but evidence-backed**: it lays out options and trade-offs, recommends with reasons, pushes
+back once if the Product Owner leans the wrong way, and defers to them when they insist (recording their
+call and the flagged trade-off either way). Decisions land in the change's `design.md ## Decisions`, with
+a standalone **ADR** (`docs/adrs/ADR-*.md`) for the load-bearing, hard-to-reverse calls — extra binding
+context `/dmons:scaffold` later feeds the worker/reviewer agents. It wraps `opsx:propose`, then points the
+Product Owner at `/dmons:scaffold` and `/opsx:apply`.
+
+```
+/dmons:architecture
+```
 
 ## Scaffold
 
