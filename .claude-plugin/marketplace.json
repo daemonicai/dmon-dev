@@ -11,13 +11,13 @@
     {
       "name": "dmons",
       "version": "0.1.0",
-      "description": "OpenSpec workflow tooling: scaffolds the Apply Workflow (an Analyst/Architect CLAUDE.md plus one or more worker subagents and a reviewer) and maintains a change's shared DEVLOG.md channel.",
+      "description": "OpenSpec workflow tooling: runs greenfield discovery (requirements-gathering as the Analyst), drives architecture decisions (the technology choices as the Architect), scaffolds the Apply Workflow (an Analyst/Architect CLAUDE.md plus one or more worker subagents and a reviewer), and maintains a change's shared DEVLOG.md channel.",
       "source": "./plugins/dmons",
       "author": {
         "name": "emmz",
         "email": "emmz.rendle@anna.money"
       },
-      "keywords": ["openspec", "orchestration", "worker", "reviewer", "scaffold", "agents", "devlog"],
+      "keywords": ["openspec", "orchestration", "worker", "reviewer", "scaffold", "agents", "devlog", "discovery", "requirements", "greenfield", "architecture", "design-decisions", "adr"],
       "category": "development"
     }
   ]
