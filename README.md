@@ -14,12 +14,17 @@ A Claude Code plugin marketplace for the **dmon** family of repos (`dcli`, `dmon
 From any Claude Code session:
 
 ```
-# Add this marketplace (local path or git remote)
-/plugin marketplace add /Users/emmz/github/emmz/dmon-dev
-# or, once pushed:  /plugin marketplace add <git-owner>/<repo>
+# Add this marketplace
+/plugin marketplace add daemonicai/dmon-dev
 
 # Install the plugin
 /plugin install dmons@dmon-dev
+```
+
+To pick up later updates, refresh the marketplace and start a new session:
+
+```
+/plugin marketplace update dmon-dev
 ```
 
 Then, in a target repo that already has `openspec/` set up:
