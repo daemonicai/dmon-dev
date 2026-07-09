@@ -11,7 +11,7 @@
     {
       "name": "dmons",
       "version": "0.1.0",
-      "description": "OpenSpec workflow tooling: scaffolds the Apply Workflow (orchestrator CLAUDE.md plus worker and reviewer subagents) and maintains a DEVLOG.md narrative alongside a change's tasks.md.",
+      "description": "OpenSpec workflow tooling: scaffolds the Apply Workflow (an Analyst/Architect CLAUDE.md plus one or more worker subagents and a reviewer) and maintains a change's shared DEVLOG.md channel.",
       "source": "./plugins/dmons",
       "author": {
         "name": "emmz",

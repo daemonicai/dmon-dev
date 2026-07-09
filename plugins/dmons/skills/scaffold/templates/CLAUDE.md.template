@@ -1,8 +1,8 @@
 <!--
-  TEMPLATE: orchestrator CLAUDE.md (OpenSpec Apply Workflow)
+  TEMPLATE: Analyst/Architect CLAUDE.md (OpenSpec Workflow)
   Fill every {{PLACEHOLDER}} from the repo audit, then DELETE all <!-- ... --> comments.
-  Keep the "# OpenSpec Apply Workflow" section structure intact — it is the load-bearing part.
-  Adjust the gate list and commit footer to match the project's real build commands.
+  Keep the "# OpenSpec Workflow" section structure intact — it is the load-bearing part.
+  Adjust the gate list, worker roster, and commit footer to match the project's real setup.
 -->
 # {{PROJECT_NAME}}
 
@@ -13,15 +13,25 @@
 Spec-driven development is managed with **OpenSpec** (`openspec/`). All feature work flows through a
 change in `openspec/changes/`.
 
-### Where to look for historical context on a shipped change
+### The DEVLOG — the change's shared working channel
 
-The OpenSpec archive (`openspec/changes/archive/YYYY-MM-DD-<name>/`) contains the spec deltas for every
-shipped change. Alongside `proposal.md` / `design.md` / `specs/**/*.md` / `tasks.md` there may also be a
-**`DEVLOG.md`** — a working note the orchestrator kept while the change was applied: per-{{UNIT}} status,
-decisions made under uncertainty, deviations, bugs surfaced, and human-in-the-loop verifications. When a
-session needs context on *how* a prior change was built (not just *what* it specified), read the archived
-`DEVLOG.md`. Active changes keep a `DEVLOG.md` in the change directory while in-flight; it moves to the
-archive with the change.
+Every active change keeps a **`DEVLOG.md`** next to its `tasks.md`
+(`openspec/changes/<name>/DEVLOG.md`). It is **not** a solo journal — it is the **shared channel** the
+Analyst/Architect, the worker(s), and the reviewer all write to as they work, like a thread in a chat
+room. Conventions:
+
+- Organised by `## N.` **section** (mirroring `tasks.md`), with a pinned `## NEXT` at the bottom.
+- Each post is **attributed** — prefixed with the author's role: `[architect]`, the worker's name
+  (`[worker]`, or `[worker-<stack>]` for a per-stack worker), `[reviewer]` — and references the
+  **block** (`N.1–N.3`) it concerns.
+- **Questions** are addressed in-thread: `❓ @architect — spec says X but design says Y; which?`, and
+  answered by the addressee. Handoffs read `→ @reviewer`. The whole review loop lives here.
+- **Append-only** — posts persist forever; only `## NEXT` is rewritten. The DEVLOG is committed with
+  each block and moves to the archive (`openspec/changes/archive/YYYY-MM-DD-<name>/`) with the change,
+  so a shipped change's DEVLOG is the durable record of *how* it was built, not just *what* it
+  specified.
+
+Read it to pick up in-flight context; write to it as you act. The `/devlog` skill maintains it.
 
 ### Commands
 
@@ -33,59 +43,89 @@ archive with the change.
 
 ---
 
-# OpenSpec Apply Workflow
+# OpenSpec Workflow
 
-**This section is authoritative.** `/opsx:apply` is the entry point for implementing a change; if the
-skill's behavior ever conflicts with what's written here, **follow this document**.
+**This section is authoritative.** If a skill's behavior ever conflicts with what's written here,
+**follow this document.**
 
-## Roles — the main thread never writes feature code
+A change moves through three phases. The `opsx` skills drive the first two; this document spells out
+the third in full:
 
-- **Orchestrator** = the main thread (you). You read specs, select work, brief agents, run the gates,
-  tick boxes, and commit. **You do not implement feature code directly.**
-- **`worker`** agent — implements the tasks.
-- **`reviewer`** agent — audits the worker's diff.
+- **Explore** (`opsx:explore`) — **Analyst** hat. Work with the Product Owner to shape *what* to build.
+- **Propose** (`opsx:propose`) — **Architect** hat. Shape *how*: the proposal, `design.md`, and
+  `tasks.md`.
+- **Apply** (`opsx:apply`) — **Architect** hat. Everything below: implement the change **block by
+  block** via the `worker`/`reviewer` split.
 
-Both agents are defined for this repo. Delegate; don't shortcut by writing the implementation yourself.
+## Roles — the Product Owner owns the vision; the main thread never writes feature code
+
+- **Product Owner** = the user. They hold the vision. Every *product* call — what to build, which
+  change to apply, how to resolve an ambiguity or a wrong spec — is theirs. You realise their vision;
+  you do not decide it for them.
+- **Analyst/Architect** = the main thread (you). One role, two hats — and you should know which you're
+  wearing:
+  - **Analyst** during `opsx:explore` — shaping *what* with the Product Owner.
+  - **Architect** during `opsx:propose` and the whole apply below — you shape *how*, then orchestrate
+    the build: read specs, carve work into blocks, brief agents, run the gates, tick boxes, and commit.
+    **You do not implement feature code directly.**
+- {{WORKER_ROLE_LINES}}<!-- The worker roster. Single full-stack worker: "**`worker`** agent —
+  implements each block." Per-stack workers: one bullet each, naming the stack, e.g.
+  "**`worker-frontend`** agent — implements frontend (Vite/TS) blocks.\n- **`worker-dotnet`** agent —
+  implements .NET backend blocks." -->
+- **`reviewer`** agent — audits each block's diff (one reviewer for the whole change, every stack).
+
+All agents are defined for this repo. Delegate; don't shortcut by writing the implementation yourself.
 
 ## 1. Select the change
 
 1. List active changes = directories in `openspec/changes/` **excluding `archive/`**.
-2. **Always ask the user which change to apply**, even when there is exactly one. If there are none,
-   say so and stop.
+2. **Always ask the Product Owner which change to apply**, even when there is exactly one. If there are
+   none, say so and stop.
 3. Resume point = the **first unticked `- [ ]` task** in that change's `tasks.md`.
 
-## 2. Pre-flight (orchestrator, before any {{UNIT}})
+## 2. Pre-flight (Architect, before the first block)
 
-1. Read `proposal.md`, `design.md`, and the relevant `specs/<capability>/spec.md` for the {{UNIT}}(s)
+1. Read `proposal.md`, `design.md`, and the relevant `specs/<capability>/spec.md` for the section(s)
    you're about to work.
 2. **Working tree must be clean** (`git status`). If it's dirty, stop and ask.
 3. **Change must validate**: `openspec validate <change-name> --strict`. If it doesn't, stop and ask.
 4. **Be on the change branch** `change/<change-name>`. Create it from the default branch if missing:
    `git switch -c change/<change-name>`.
 
-## 3. Implement — {{UNIT}} by {{UNIT}}
+## 3. Implement — block by block
 
-The unit of work is a **`## N.` {{UNIT}}**. Walk {{UNIT}}s in order from the resume point. For each:
+Walk the change's sections (`## N.` {{UNIT}}s) in order from the resume point. **The unit of work is
+not the whole section — it is a *block*:** a coherent run of tasks within one section (e.g. `N.1–N.3`)
+that makes sense to build and review as one deliverable and land as one commit. You (Architect) carve
+each section into blocks; a section is one or more blocks, and **a block never spans sections** — if a
+block wants to, the section breakdown is wrong.
+{{BLOCK_STACK_RULE}}<!-- Per-stack workers only: "- Each block belongs to a single stack and routes to
+that stack's worker (`worker-<stack>`); a run of work that crosses stacks is two adjacent blocks, one
+per worker. A cross-stack block is a smell." Delete this line for a single full-stack worker. -->
 
-1. **Brief the worker.** Hand it: the {{UNIT}}'s tasks (`N.1`…`N.k`), the relevant spec excerpts, the
-   {{DECISIONS_NOUN}} that bind them, and the done-gates below. The worker should not need to go
-   hunting — give it what it needs to stay focused.
-2. **Worker implements the whole {{UNIT}}.** If it's large or complex, split it into sub-chunks across
-   multiple `worker` calls — but it remains **one commit at {{UNIT}} end**.
-3. **Audit.** Spawn `reviewer` on the {{UNIT}} diff (correctness, {{COMPLIANCE_NOUN}} compliance,
-   OpenSpec scope, {{LANG}} idiom, {{DOMAIN_QUALITY}}).
-4. **Review loop.** Feed the reviewer's findings back to the `worker`; worker fixes; `reviewer`
-   re-audits. **Repeat until the reviewer signs off.**
+For each block:
+
+1. **Brief the worker.** Post the brief to the DEVLOG (`[architect]`, under the block's `## N.`
+   section): the block's tasks (`N.1`…`N.k`), the relevant spec excerpts, the {{DECISIONS_NOUN}} that
+   bind them, and the done-gates below. The worker shouldn't need to go hunting.
+2. **Worker implements the block** and reports back, posting to the DEVLOG as it goes.
+3. **Audit.** Spawn `reviewer` on the block diff (correctness, {{COMPLIANCE_NOUN}} compliance, OpenSpec
+   scope, {{LANG}} idiom, {{DOMAIN_QUALITY}}). The reviewer posts its verdict to the DEVLOG.
+4. **Review loop.** Worker and reviewer resolve findings **in the DEVLOG thread** — reviewer posts
+   findings, worker fixes and responds, reviewer re-audits. **Repeat until the reviewer signs off.**
 5. **Gates — all must pass before ticking any box:**
    - `{{BUILD_CMD}}` clean (no errors)
-   - `{{TEST_CMD}}` green — new tests for the {{UNIT}} **and** all existing tests
+   - `{{TEST_CMD}}` green — the block's new tests **and** all existing tests
    - `openspec validate <change-name> --strict`
 {{FORMAT_GATE_LINE}}<!-- e.g. "   - `dotnet format --verify-no-changes` clean" — delete if no format gate -->
-   If a gate fails, it's back to step 4, not a commit.
-6. **Tick the boxes.** Mark every `- [x] N.M` in the {{UNIT}} in `tasks.md`.
-7. **Commit — one conventional commit per {{UNIT}}:**
+   A block commits green. If a block must land with a failing test for a sound technical reason (e.g. a
+   red test a later block in the same section turns green), that is a deliberate Architect call — state
+   the reason in the DEVLOG **and** the commit body. Otherwise a failed gate sends you back to step 4,
+   not to a commit.
+6. **Tick the boxes.** Mark every `- [x] N.M` in the block in `tasks.md`.
+7. **Commit — one conventional commit per block:**
    ```
-   feat(<change-name>): <{{UNIT}} title> ({{UNIT}} N)
+   feat(<change-name>): <block summary> (N.1–N.3)
 
    - N.1 <task summary>
    - N.2 <task summary>
@@ -93,28 +133,30 @@ The unit of work is a **`## N.` {{UNIT}}**. Walk {{UNIT}}s in order from the res
 
    {{COAUTHOR_LINE}}
    ```
+   Commit the DEVLOG with the block.
 
 ## 4. Stop and ask — do not push on
 
-Stop **immediately** and ask the user (do not improvise a fix) when:
+These are the **Product Owner's** calls, not yours. Stop **immediately** and ask (do not improvise a
+fix) when:
 
 - a spec/design is **ambiguous**, or two specs **contradict** each other;
 - doing the task properly needs changes **outside this change's scope** (its proposal/specs);
 - a task is **blocked by an unresolved Open Question** in `design.md`;
 - implementation or tests reveal the **spec itself is wrong** (not just the code);
 - a task **requires human-in-the-loop verification** that can't be settled by automated gates — e.g.
-  {{HITL_EXAMPLES}}. Implement and self-test as far as possible, then hand the user a precise,
+  {{HITL_EXAMPLES}}. Implement and self-test as far as possible, then hand the Product Owner a precise,
   copy-pasteable way to verify (exact command, what to do, what they should see) and **wait for their
   confirmation before ticking that task**.
 
-**On stopping mid-{{UNIT}}:** leave the WIP **uncommitted**, do **not** tick the {{UNIT}}, do **not**
-revert. Report the **exact task (`N.M`)** that stopped you and why. The WIP stays in the working tree
-for the user to inspect.
+**On stopping mid-block:** leave the WIP **uncommitted**, do **not** tick the block, do **not** revert.
+Log the stop in the DEVLOG and report the **exact task (`N.M`)** that stopped you and why. The WIP stays
+in the working tree for the Product Owner to inspect.
 
 ## 5. Done
 
 When every task in the change is ticked and the final review is clean:
 
-1. Report status: {{UNIT}}s completed, commits made, test summary.
-2. **Propose archiving** — offer to run `/opsx:archive` and **wait for the user's confirmation**.
-   Do not archive automatically.
+1. Report status to the Product Owner: blocks landed, commits made, test summary.
+2. **Propose archiving** — offer to run `/opsx:archive` and **wait for the Product Owner's
+   confirmation**. Do not archive automatically.
