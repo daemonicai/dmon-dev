@@ -21,6 +21,13 @@ changes:
 The skill does **not** install OpenSpec, the `/opsx:*` commands, or the `openspec-*` skills — those come
 from the `openspec` CLI (`openspec init`). It only produces the orchestration layer that wraps them.
 
+Scaffold is the **third** step of the greenfield chain: **`/dmons:discovery`** (the Analyst gathers
+requirements — the *what*) → **`/dmons:architecture`** (the Architect decides the technology — the
+*how*, recorded in each change's `design.md ## Decisions` and any ADRs) → **`/dmons:scaffold`** (this
+skill, which audits those decisions to generate the Apply Workflow agents). By the time scaffold runs the
+project should already have at least one change carrying the decisions the agents will enforce; if it
+doesn't, that's the signal to run discovery and architecture first (see Step 1).
+
 The templates live at `${CLAUDE_PLUGIN_ROOT}/skills/scaffold/templates/` — `CLAUDE.md.template`,
 `worker.md.template`, `reviewer.md.template`. They are annotated skeletons with `{{PLACEHOLDER}}` slots
 and `<!-- guidance -->` comments. Your job is to fill every slot from the audit and **delete every
@@ -34,9 +41,14 @@ Run a quick check (use context-mode or plain `ls`/`test`, keep output small):
 
 1. `openspec/` exists in the repo root. If not: stop and tell the user this repo isn't OpenSpec-managed
    yet — they should run `openspec init` first.
-2. There is **at least one change** under `openspec/changes/` (excluding `archive/`). If there are none,
-   warn that the generated agents will be thin on binding decisions, and ask whether to proceed using
-   only archived changes / `openspec/project.md`, or stop.
+2. There is **at least one change** under `openspec/changes/` (excluding `archive/`). If there are none:
+   - If the repo is **greenfield** (empty, no changes at all), the decisions the agents enforce don't
+     exist yet — point the Product Owner at **`/dmons:discovery`** to gather requirements, then
+     **`/dmons:architecture`** to decide the technology, which produces the first change. Scaffolding
+     before that yields agents with nothing binding to enforce.
+   - Otherwise (e.g. only archived changes or a `project.md` to lean on), warn that the generated agents
+     will be thin on binding decisions, and ask whether to proceed using only archived changes /
+     `openspec/project.md`, or stop.
 3. Note whether `openspec/specs/` has committed capability specs.
 
 ## Step 2 — Audit the repo
