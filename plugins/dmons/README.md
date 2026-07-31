@@ -85,6 +85,11 @@ supervisor runs **once per section** and carries Opus.
 The roles coordinate through the change's shared `DEVLOG.md` — an attributed thread where the Architect
 briefs, the worker reports and asks questions, and both review loops play out.
 
+**Only the Architect invokes agents.** The worker, reviewer, and supervisor never spawn each other — a
+DEVLOG handoff (`→ @reviewer`) is a post, not an invocation. One thread holds the whole picture, so the
+gates, box-ticking, and per-block commits the Architect owns can't be skipped by a loop running without
+it.
+
 ## What it does *not* do
 
 It does not install OpenSpec itself, the `/opsx:*` commands, or the `openspec-*` skills — those are

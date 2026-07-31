@@ -1,6 +1,6 @@
 {
   "name": "dmons",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "OpenSpec workflow tooling: runs greenfield discovery (requirements-gathering as the Analyst), drives architecture decisions (the technology choices as the Architect), scaffolds the Apply Workflow (an Analyst/Architect CLAUDE.md plus one or more worker subagents, a per-block reviewer, and a per-section supervisor), migrates already-scaffolded repos onto newer versions, and maintains a change's shared DEVLOG.md channel.",
   "author": {
     "name": "emmz",
