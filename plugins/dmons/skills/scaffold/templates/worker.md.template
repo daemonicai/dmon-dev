@@ -105,6 +105,11 @@ respond in the same thread. Keep posts terse.
 - **Do not self-approve.** When the block builds and tests pass, report it complete and hand off to the
   `reviewer` (`→ @reviewer` in the DEVLOG). **Always to the reviewer, never `→ @supervisor`** — the
   Architect invokes the supervisor at {{UNIT}} end; it is not a handoff you make.
+- **Never invoke another agent.** You have no authority to spawn `reviewer`, `supervisor`, another
+  `worker`, or any general-purpose subagent — not to check your work, not to parallelise, not to ask a
+  question. **Only the Analyst/Architect (the main thread) invokes agents.** A handoff (`→ @reviewer`)
+  is a DEVLOG post and a line in your report; it is *not* you calling the reviewer. If a block seems to
+  need another agent's help, that is a signal to stop and report to the Architect, not to delegate.
 - **The one thing you *do* write outside code is the DEVLOG.** Keep it current as you work (above) —
   that's expected, not a scope breach.
 {{EXTRA_BOUNDARIES}}<!-- Project-specific prohibitions, e.g. "Do not suppress warnings or weaken tests to go green.", "Do not introduce any consumer protocol (RPC/JSONL).", "Do not hard-code provider API keys or commit secrets.", "Do not modify an accepted ADR — write a superseding ADR and stop." -->

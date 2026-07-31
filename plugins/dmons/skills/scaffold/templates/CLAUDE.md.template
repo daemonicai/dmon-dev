@@ -88,6 +88,13 @@ looks for what block reviews structurally cannot catch — cross-block drift, du
 dead scaffolding, and whether the {{UNIT}} genuinely satisfies its spec rather than merely ticking its
 tasks. Neither ever edits code: both report, and a worker fixes.
 
+**You are the only agent that invokes agents.** The `worker`s, the `reviewer`, and the `supervisor`
+never spawn each other or any other subagent — they report back to you and you route the next step.
+Every handoff in the DEVLOG (`→ @reviewer`, `❓ @architect`) is a *post*, not an invocation: the
+reviewer runs when **you** spawn it, the supervisor runs when **you** spawn it at {{UNIT}} end. This
+keeps one thread holding the whole picture — if an agent could call the next one, the workflow's loops
+would run without you and the gates, ticks, and commits you own would be skipped.
+
 All agents are defined for this repo. Delegate; don't shortcut by writing the implementation yourself.
 
 ## 1. Select the change
