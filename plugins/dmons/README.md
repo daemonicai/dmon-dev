@@ -37,6 +37,11 @@ a standalone **ADR** (`docs/adrs/ADR-*.md`) for the load-bearing, hard-to-revers
 context `/dmons:scaffold` later feeds the worker/reviewer/supervisor agents. It wraps `opsx:propose`, then
 points the Product Owner at `/dmons:scaffold` and `/opsx:apply`.
 
+Deciding a stack includes deciding **how its gates run**: the exact build/test/format/lint commands, each
+one non-interactive, failing non-zero, and with a check-mode formatter. Those become the `Makefile`
+targets `/dmons:scaffold` generates, so a toolchain that can't offer a clean gate is evidence against it
+while the decision is still open.
+
 ```
 /dmons:architecture
 ```
@@ -46,6 +51,16 @@ points the Product Owner at `/dmons:scaffold` and `/opsx:apply`.
 Scaffolds the **OpenSpec Apply Workflow** into a repo. It generates the repo-local files, each tailored
 to the project by auditing its OpenSpec specs and changes:
 
+- `Makefile` — the project's **command surface**: `build` / `test` / `format` / `lint` per stack, the
+  OpenSpec-common `validate`, and `-k` gate sets that compose them. Every gate target prints its own exit
+  code as `LABEL_EXIT:<n>` and exits with it, so an agent quotes a code instead of reading a log — a tool
+  that exits non-zero while printing innocuous output can't be mistaken for a pass. Raw toolchain commands
+  live here and nowhere else; every other generated file names targets. Always shown in full and confirmed
+  before it's written, and an existing Makefile is merged into, never overwritten.
+- `.claude/settings.json` — the gate targets, offered as exact-match permission rules (`Bash(make test)`)
+  merged into `permissions.allow`, so the workflow's gates stop prompting. Committed, so the whole team
+  gets them alongside the committed agents. Asked separately from the Makefile, and `publish`/`clean` are
+  deliberately left out so they still prompt.
 - `CLAUDE.md` — **Analyst/Architect** instructions: a project header plus the authoritative *OpenSpec
   Workflow*. The main thread is cast as the Analyst/Architect (Analyst hat during `opsx:explore`,
   Architect hat during `opsx:propose` and apply), working for you — the **Product Owner** — to realise
@@ -106,14 +121,18 @@ In a repo that already has `openspec/` with at least one change:
 
 The skill:
 1. Verifies the repo is OpenSpec-managed.
-2. Audits `openspec/project.md`, change `design.md` `## Decisions`, ADRs, the build system, distinct tech
-   stacks, and tooling signals (e.g. `graphify-out/`).
+2. Audits `openspec/project.md`, change `design.md` `## Decisions`, ADRs, the build system (the raw
+   commands that become the Makefile's recipes), distinct tech stacks, and tooling signals (e.g.
+   `graphify-out/`).
 3. Picks the section-container term (*section* vs *group*) to match the repo; the unit of work within a
    section is always a **block**.
-4. Confirms any gaps (build commands, project tagline, full-stack vs per-stack workers, overwrites) via a
-   short prompt.
-5. Fills the templates in [`skills/scaffold/templates/`](skills/scaffold/templates) and writes the files,
-   never clobbering an existing `CLAUDE.md` without asking.
+4. Confirms any gaps (the raw build/test/format/lint commands, project tagline, full-stack vs per-stack
+   workers, overwrites) via a short prompt.
+5. Fills the templates in [`skills/scaffold/templates/`](skills/scaffold/templates) and writes the files —
+   the `Makefile` first, shown in full and applied only on your say-so, then the rest, never clobbering an
+   existing `CLAUDE.md` without asking.
+6. Offers, as a separate ask, to allowlist the gate targets in the committed `.claude/settings.json` so
+   the workflow stops prompting for them.
 
 ## Update scaffold
 

@@ -55,9 +55,14 @@ attributed thread grouped by `## N.` {{UNIT}}. Post your verdict and findings th
 
 ## Tools
 
+- **The `Makefile`** — `{{BUILD_CMD}}`, `{{TEST_CMD}}`, `{{VALIDATE_CMD}}`, or `{{GATES_CMD}}` for the
+  set. **Never the raw toolchain.** Each target ends by printing `LABEL_EXIT:<n>`; that line is the
+  evidence, not the log above it. When you re-run a gate to check a worker's claim, cite the code you
+  saw — a tool can exit non-zero while printing what reads like a clean run.
 - **context-mode** (`mcp__plugin_context-mode_context-mode__ctx_execute` / `ctx_execute_file` /
-  `ctx_batch_execute`) — for `{{BUILD_CMD}}`, `{{TEST_CMD}}`, `git diff`, and any large-output command.
-  Only the summary enters context. Bare Bash only for `git`, `mkdir`, `rm`, `mv`, navigation.
+  `ctx_batch_execute`) — for the `make` gates, `git diff`, and any large-output command. Only the
+  summary enters context, so keep the `LABEL_EXIT:` line in what you print. Bare Bash only for `git`,
+  `mkdir`, `rm`, `mv`, navigation.
 {{GRAPHIFY_TOOL_LINE}}<!-- If graphify-out/ exists: "- **graphify** — `graphify query \"<question>\"` / `graphify path \"<A>\" \"<B>\"` for tracing relationships when `graphify-out/graph.json` exists." Otherwise delete. -->
 - **Grep / Glob / Read** for tracing call sites and checking interface compliance. (No Serena MCP in
   this project.)
@@ -70,6 +75,11 @@ attributed thread grouped by `## N.` {{UNIT}}. Post your verdict and findings th
 {{CORRECTNESS_LANG_BULLETS}}<!-- Language-specific correctness checks. For C#: "Async/await correct: no sync-over-async (`.Result`, `.Wait()`), no `async void` outside event handlers. `CancellationToken`s threaded. `IDisposable`/`IAsyncDisposable` disposed." Adapt to the project's language. -->
 - Tests cover the change and **assert behaviour**, not just that code runs.
 - Build is clean: no warnings, no analyzer suppressions added.
+- **The gates were actually run through the Makefile.** The worker's report should carry exit lines
+  (`BUILD_EXIT:0 TEST_EXIT:0`), not a prose claim that things pass. A block whose gates were run with
+  the raw toolchain, or reported as "green" with no exit code, is unverified — ask for the codes.
+- **The diff does not touch the `Makefile`.** Gate targets are the Architect's; a worker editing them
+  is a blocker, whatever the edit looks like.
 
 ### {{DECISIONS_HEADING}} (blockers if violated)
 {{BINDING_DECISIONS}}

@@ -1,0 +1,123 @@
+#!! TEMPLATE: ./Makefile — the project's command surface.
+#!! Fill every {{PLACEHOLDER}} from the repo audit, then DELETE every line starting with `#!!`.
+#!! The ordinary `#` comments below are PART OF THE GENERATED FILE — keep them. They explain the
+#!! EXIT convention to whoever opens the Makefile later, agent or human.
+#!! RECIPE LINES MUST START WITH A LITERAL TAB, never spaces. A Makefile with spaces is broken.
+#!! Structure: one section per tech stack (the primary stack unprefixed, every additional stack
+#!! prefixed `<stack>-`), then the spec section (identical in every OpenSpec repo), then the gate
+#!! sets, then release/housekeeping. Delete any target the project genuinely has no command for —
+#!! but see the scaffold SKILL.md rule: a gate you cannot derive is confirmed with the Product
+#!! Owner, not silently dropped.
+# {{PROJECT_NAME}} — gate targets.
+#
+# Every gate prints its own exit code as `LABEL_EXIT:<n>` and exits with it, so a
+# report can quote the code rather than an agent's reading of the output. This is
+# not cosmetic: a tool can exit non-zero while printing output that reads exactly
+# like a clean run.{{EXIT_RATIONALE_EXAMPLE}}
+#
+# `gates` runs every gate in its set WITHOUT stopping at the first failure, so one
+# invocation reports the whole picture instead of hiding the rest behind gate one.
+#
+# The active OpenSpec changes are discovered, not hardcoded, so the command string
+# stays stable as changes come and go.
+
+SHELL := /bin/bash
+
+CHANGES := $(notdir $(patsubst %/,%,$(filter-out %/archive/,$(wildcard openspec/changes/*/))))
+
+.PHONY: {{PHONY_LIST}}
+#!! Every target defined below, space-separated, in definition order.
+
+# --- {{PRIMARY_STACK}} ---------------------------------------------------------
+
+build:
+	@{{RAW_BUILD_CMD}}; code=$$?; echo "BUILD_EXIT:$$code"; exit $$code
+
+test:
+	@{{RAW_TEST_CMD}}; code=$$?; echo "TEST_EXIT:$$code"; exit $$code
+
+format:
+	@{{RAW_FORMAT_CMD}}; code=$$?; echo "FORMAT_EXIT:$$code"; exit $$code
+#!! The format gate must be a CHECK, not a rewrite — `dotnet format --verify-no-changes`,
+#!! `prettier --check`, `cargo fmt --check`, `ruff format --check`. A target that reformats the
+#!! tree turns a gate into an edit the reviewer never sees. Delete this target if the project has
+#!! no format gate at all.
+
+lint:
+	@{{RAW_LINT_CMD}}; code=$$?; echo "LINT_EXIT:$$code"; exit $$code
+#!! ONLY when the stack has a linter genuinely distinct from its formatter — eslint, clippy,
+#!! `ruff check`, a separate analyzer pass. For .NET, where `dotnet build` already runs the
+#!! analyzers and `format` is the style gate, there is no lint target: DELETE it. Never emit a
+#!! lint target that re-runs the formatter under another name.
+
+#!! ADDITIONAL STACKS — repeat the block above once per extra stack, prefixed with the stack
+#!! name and with the EXIT labels prefixed to match, e.g. for a `web` frontend:
+#!!
+#!! # --- frontend ----------------------------------------------------------------
+#!!
+#!! web-build:
+#!! <TAB>@npm --prefix web run build; code=$$?; echo "WEB_BUILD_EXIT:$$code"; exit $$code
+#!!
+#!! web-test:
+#!! <TAB>@npm --prefix web test; code=$$?; echo "WEB_TEST_EXIT:$$code"; exit $$code
+#!!
+#!! web-lint:
+#!! <TAB>@npm --prefix web run lint; code=$$?; echo "WEB_LINT_EXIT:$$code"; exit $$code
+#!!
+#!! The prefix is the stack name the worker roster uses, so `worker-web` runs `make gates-web`.
+#!! Delete this whole guidance block for a single-stack project.
+
+# --- spec ----------------------------------------------------------------------
+
+# Validates every active change (archive excluded). No active change is a failure,
+# not a silent pass — an empty run would otherwise report VALIDATE_EXIT:0 while
+# having validated nothing.
+validate:
+	@fail=0; \
+	if [ -z "$(CHANGES)" ]; then \
+		echo "no active change found under openspec/changes/"; fail=1; \
+	else \
+		for c in $(CHANGES); do openspec validate $$c --strict || fail=1; done; \
+	fi; \
+	echo "VALIDATE_EXIT:$$fail"; exit $$fail
+
+changes:
+	@echo "$(CHANGES)"
+#!! The spec section is IDENTICAL in every OpenSpec repo — copy it verbatim, do not re-derive it.
+
+# --- gate sets -----------------------------------------------------------------
+
+gates:
+	@$(MAKE) --no-print-directory -k {{PRIMARY_GATE_TARGETS}}; code=$$?; \
+	echo "GATES_EXIT:$$code"; exit $$code
+#!! {{PRIMARY_GATE_TARGETS}} = the primary stack's gate targets plus `validate`,
+#!! e.g. `build test format validate`. `-k` is load-bearing: it keeps going after the first
+#!! failure so one run reports every broken gate.
+
+#!! MULTI-STACK ONLY — one `gates-<stack>` per additional stack, plus a `gates-all`:
+#!!
+#!! gates-web:
+#!! <TAB>@$(MAKE) --no-print-directory -k web-build web-test web-lint validate; code=$$?; \
+#!! <TAB>echo "GATES_WEB_EXIT:$$code"; exit $$code
+#!!
+#!! gates-all:
+#!! <TAB>@$(MAKE) --no-print-directory -k build test format web-build web-test web-lint validate; code=$$?; \
+#!! <TAB>echo "GATES_ALL_EXIT:$$code"; exit $$code
+#!!
+#!! Every stack's set includes `validate` — the spec gate belongs to every block, whatever stack
+#!! it was. Delete this block for a single-stack project.
+
+# --- release & housekeeping ----------------------------------------------------
+
+# Not gates. `publish` is the Product Owner's to run — no agent invokes it as part of a block.
+publish:
+	@{{RAW_PUBLISH_CMD}}; code=$$?; echo "PUBLISH_EXIT:$$code"; exit $$code
+
+clean:
+	@{{RAW_CLEAN_CMD}}; code=$$?; echo "CLEAN_EXIT:$$code"; exit $$code
+#!! Emit `publish` only when the project actually ships an artefact (a package, a container, a
+#!! release binary) and the audit found the real command. A library on nuget/npm has one; an
+#!! internal service deployed by CI usually does not — delete the target rather than guessing.
+#!! `clean` is the stack's own clean (`dotnet clean`, `rm -rf dist node_modules/.vite`, `cargo
+#!! clean`); delete it if the project has nothing meaningful to remove. Neither target appears in
+#!! any gate set, and neither is ever run by a worker, reviewer, or supervisor.

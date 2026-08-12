@@ -77,6 +77,9 @@ DEVLOG, ask the Architect for it (`❓ @architect`) rather than guessing a range
   a later block superseded and nobody removed.
 - **Naming and layering** — the {{UNIT}}'s files, types, and namespaces read as one design, not as a
   sequence of separately-negotiated deliverables.
+- **Gate coverage** — the `Makefile` still runs everything the {{UNIT}} shipped. A test project, a
+  package, or a whole stack added mid-{{UNIT}} that no gate target picks up is code that has never been
+  built or tested by the workflow, and no single block's diff shows it.
 
 ### Architectural coherence — this project's structural hazards
 {{ARCHITECTURAL_COHERENCE_BULLETS}}
@@ -110,9 +113,11 @@ DEVLOG, ask the Architect for it (`❓ @architect`) rather than guessing a range
 {{GRAPHIFY_TOOL_LINE}}<!-- If graphify-out/ exists: "- **graphify** — `graphify query \"<question>\"` / `graphify path \"<A>\" \"<B>\"` for tracing relationships across the {{UNIT}}'s blocks when `graphify-out/graph.json` exists." Otherwise delete. -->
 - **Grep / Glob / Read** for tracing call sites across the {{UNIT}} and checking interface consistency.
 
-**You do not run the gates.** The Architect ran `{{BUILD_CMD}}`, `{{TEST_CMD}}`, and
-`openspec validate --strict` on every block before committing it. Read the DEVLOG for those results
-rather than re-running them; spend your budget on reading code.
+**You do not run the gates.** The Architect ran the Makefile's gates — `{{BUILD_CMD}}`, `{{TEST_CMD}}`,
+`{{VALIDATE_CMD}}` — on every block before committing it, and each printed its `LABEL_EXIT:<n>`. Read
+those exit lines in the DEVLOG rather than re-running anything; spend your budget on reading code. If a
+block's DEVLOG entry has no exit codes at all, that is a {{UNIT}}-level finding: a gate nobody can
+verify ran.
 
 ## The DEVLOG — where the {{UNIT}} review happens
 

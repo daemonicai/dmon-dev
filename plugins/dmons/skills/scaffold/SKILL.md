@@ -8,6 +8,13 @@ description: Scaffold the OpenSpec Apply Workflow into the current repo — gene
 Generate the repo-local files, each tailored to the current project by auditing its OpenSpec specs and
 changes:
 
+- `Makefile` — the project's **command surface**: one gate target per stack (`build`, `test`, `format`,
+  and `lint` where it's distinct), the OpenSpec `validate`/`changes` pair every repo shares, and the
+  `-k` gate sets that compose them. **Every gate target prints its own exit code** as `LABEL_EXIT:<n>`
+  and exits with it, so an agent quotes a code instead of interpreting a log. Every other generated file
+  cites these target names and nothing else. This is the one generated file you must show the Product
+  Owner in full before writing (Step 6) — after which its gate targets are separately offered as an
+  allowlist in the repo's committed `.claude/settings.json`, so the workflow's gates stop prompting.
 - `CLAUDE.md` — the **Analyst/Architect** instructions: a project header plus the authoritative OpenSpec
   Workflow. The main thread is cast as the **Analyst/Architect** (Analyst hat during `opsx:explore`,
   Architect hat during `opsx:propose` and apply) working for the user, who is the **Product Owner**.
@@ -38,11 +45,13 @@ skill, which audits those decisions to generate the Apply Workflow agents). By t
 project should already have at least one change carrying the decisions the agents will enforce; if it
 doesn't, that's the signal to run discovery and architecture first (see Step 1).
 
-The templates live at `${CLAUDE_PLUGIN_ROOT}/skills/scaffold/templates/` — `CLAUDE.md.template`,
-`worker.md.template`, `reviewer.md.template`, `supervisor.md.template`. They are annotated skeletons
-with `{{PLACEHOLDER}}` slots
-and `<!-- guidance -->` comments. Your job is to fill every slot from the audit and **delete every
-guidance comment** before writing the final files.
+The templates live at `${CLAUDE_PLUGIN_ROOT}/skills/scaffold/templates/` — `Makefile.template`,
+`CLAUDE.md.template`, `worker.md.template`, `reviewer.md.template`, `supervisor.md.template`. They are
+annotated skeletons with `{{PLACEHOLDER}}` slots
+and guidance comments — `<!-- ... -->` in the markdown templates, `#!!`-prefixed lines in
+`Makefile.template` (a Makefile has no HTML comments, and its plain `#` comments are part of the
+generated output). Your job is to fill every slot from the audit and **delete every guidance comment**
+before writing the final files.
 
 ---
 
@@ -84,14 +93,35 @@ output in context-mode.
   vision doc? If so, those are *also* binding context; if not, the binding decisions live only in each
   change's `design.md`.
 
-**Build system & gates** — detect, don't assume:
-- `Makefile` → `make build` / `make test` (read the targets to confirm).
+**Build system & gates** — detect, don't assume. What you're gathering here are the **raw commands**,
+which become the Makefile's recipes; the agents never see them again, only the target names.
+
 - `*.slnx` / `*.csproj` / `*.sln` → `dotnet build` / `dotnet test`; check for a `dotnet format` /
-  analyzers / `TreatWarningsAsErrors` policy (a format gate).
-- `package.json` → the project's `build` / `test` / `lint` scripts.
-- `Cargo.toml` → `cargo build` / `cargo test` / `cargo clippy` / `cargo fmt --check`.
-- `pyproject.toml` → the test runner + linter/formatter (pytest, ruff, etc.).
-- Anything else: read the CI config or existing docs to find the real commands.
+  analyzers / `TreatWarningsAsErrors` policy (a format gate). Analyzers run inside `dotnet build`, so
+  .NET has **no separate lint target**.
+- `package.json` → the project's `build` / `test` / `lint` / `format` scripts, and the prefix needed to
+  run them if the package isn't at the repo root (`npm --prefix web run build`).
+- `Cargo.toml` → `cargo build` / `cargo test` / `cargo clippy` (lint) / `cargo fmt --check` (format).
+- `pyproject.toml` → the test runner plus the linter *and* formatter, which are usually distinct
+  (`pytest`, `ruff check`, `ruff format --check`).
+- Anything else: read the CI config or existing docs to find the real commands. CI is the best source —
+  it holds the commands that actually gate the project.
+- **Publish / clean:** a real packaging command (`dotnet pack -c Release`, `npm publish`,
+  `cargo publish`) and a real clean, if the project has them. Don't invent either; a service deployed by
+  CI often has no publish command at all.
+
+**A format target must be a check, not a rewrite** (`--verify-no-changes`, `--check`). A target that
+reformats the tree turns a gate into an unreviewed edit.
+
+**An existing `Makefile`** is an audit source, not an obstacle: read its targets and reuse its recipes
+as the raw commands. If it already follows this shape, most of the generation is confirmation. Note
+which targets it lacks (`validate`, the `LABEL_EXIT:` echoes, the gate sets) — those are what Step 6
+proposes adding. **Never overwrite a recipe the project already wrote**; propose additions and let the
+Product Owner decide.
+
+**Gates you can't derive.** If a stack's real test or format command isn't discoverable, don't guess and
+don't quietly drop the target — carry it into Step 4 and ask. A missing gate target is a gate the
+workflow will never run.
 
 **Tech stacks (for the worker roster)**
 - Enumerate the **distinct** tech stacks in the repo — a stack is a body of code with its own toolchain,
@@ -102,6 +132,11 @@ output in context-mode.
   the Product Owner wants a single full-stack worker or a dedicated worker per stack. Record each
   stack's own build/test command — a per-stack worker's gates and idioms come from its stack, not the
   repo average.
+- **Stack naming drives the Makefile targets.** The **primary** stack (the one the project is mostly
+  about) takes the unprefixed targets — `build`, `test`, `format` — and every additional stack is
+  prefixed with its name: `web-build`, `web-test`, and the gate set `gates-web`. Pick each stack's short
+  name here and use it everywhere: the target prefix, the `EXIT` label (`WEB_BUILD_EXIT`), and the
+  worker name (`worker-web`) must all agree.
 
 **Tooling signals**
 - `graphify-out/graph.json` present? → include the graphify tool lines in the agents.
@@ -147,7 +182,10 @@ the supervisor, or the generated agents will disagree about what they are review
 You will rarely have every fact. Use the **AskUserQuestion tool** to confirm only what you genuinely
 can't infer — typically:
 - the one-line project description / tagline (if `project.md` is absent or vague);
-- the exact build / test / format commands (offer your detected guess as the recommended option);
+- the exact **raw** build / test / format / lint commands per stack that the Makefile will wrap (offer
+  your detected guess as the recommended option) — and explicitly ask about any gate you **couldn't**
+  derive rather than shipping a Makefile that's missing it;
+- whether the project has a real `publish` and `clean` command, if the audit didn't settle it;
 - **worker roster (only if Step 2 found more than one stack):** ask whether they want a **single
   full-stack worker** or **a dedicated worker per stack**. If per-stack, propose the worker names
   (`worker-<stack>`, e.g. `worker-frontend` / `worker-dotnet`) for confirmation. The reviewer and the
@@ -159,6 +197,9 @@ you can read.
 
 ## Step 5 — Fill the templates
 
+**Fill `Makefile.template` first** — it defines the target names every other file cites, and getting
+them settled first is what keeps the four files agreeing with each other.
+
 For each template:
 1. Read `${CLAUDE_PLUGIN_ROOT}/skills/scaffold/templates/<file>.template`.
 2. Replace every `{{PLACEHOLDER}}` with the audited content. Keep the prose voice of the template —
@@ -166,6 +207,11 @@ For each template:
 3. **Delete every `<!-- ... -->` comment**, including the header block. The final files must contain no
    template scaffolding. (Step 6 then adds the one comment that belongs in the output — the provenance
    stamp.)
+   - **In `Makefile.template` the rule is different:** delete every line starting with `#!!`, and
+     **keep** the plain `#` comments — the header explaining the `LABEL_EXIT:` convention and the note
+     above `validate` are part of the generated file, written for whoever opens the Makefile next.
+   - Recipe lines are **tab-indented**. A Makefile with space-indented recipes doesn't run; check
+     before you write it.
 4. For optional lines (format gate, graphify tools, ADR clauses): include them only when the audit says
    they apply; otherwise remove the line cleanly (no dangling placeholder, no empty bullet).
 
@@ -177,7 +223,11 @@ Key slots and where they come from:
 | `{{TECH_STACK}}`, `{{ENGINEER_STRENGTHS}}`, `{{LANG}}`, `{{LANG_IDIOMS}}`, `{{STYLE_BULLETS}}` | detected language + conventions |
 | `{{UNIT}}` | Step 3 — the section container's name (section/group) |
 | `{{WORKER_NAME}}`, `{{STACK}}`, `{{WORKER_STACK_LINE}}`, `{{WORKER_ROLE_LINES}}`, `{{BLOCK_STACK_RULE}}` | Step 4 worker roster (see the multi-stack note below the table) |
-| `{{BUILD_CMD}}`, `{{TEST_CMD}}`, `{{GATE_LIST}}`, format lines | detected build system (per-stack worker: **its** stack's commands) |
+| `{{RAW_BUILD_CMD}}`, `{{RAW_TEST_CMD}}`, `{{RAW_FORMAT_CMD}}`, `{{RAW_LINT_CMD}}`, `{{RAW_PUBLISH_CMD}}`, `{{RAW_CLEAN_CMD}}` | Step 2's detected raw commands — **`Makefile` only**. No other generated file ever names a toolchain command |
+| `{{PROJECT_NAME}}`, `{{PRIMARY_STACK}}`, `{{PHONY_LIST}}`, `{{PRIMARY_GATE_TARGETS}}` | the stack names and target set settled in Step 2/4 |
+| `{{EXIT_RATIONALE_EXAMPLE}}` | *optional* — one concrete sentence naming a tool in **this** project that exits non-zero while printing innocuous output (e.g. "`dotnet format --verify-no-changes` exits 2 while printing a single `warning: IDEnnnn` line"). Delete if the audit found no such case; don't invent one |
+| `{{BUILD_CMD}}`, `{{TEST_CMD}}`, `{{VALIDATE_CMD}}`, `{{GATES_CMD}}`, `{{GATE_LIST}}`, the format/lint command and gate lines | **`make` target names** — `make build`, `make test`, `make validate`, `make gates`. A per-stack worker gets **its** stack's targets: `make web-build`, `make gates-web` |
+| `{{EXTRA_STACK_COMMAND_LINES}}` | multi-stack only — one `CLAUDE.md` command line per additional stack's gate set, plus `make gates-all` |
 | `{{BINDING_DECISIONS}}`, `{{DECISIONS_HEADING}}`, `{{DECISIONS_NOUN}}` | change `design.md` `## Decisions` + ADRs |
 | `{{ADR_CONTEXT_LINES}}`, `{{ADR_STOP_CLAUSE}}`, `{{COMPLIANCE_NOUN}}` | whether ADRs exist (ADRs → "ADR"; else "design-decision") |
 | `{{DOMAIN_HAZARDS}}`, `{{DOMAIN_HAZARDS_HEADING}}`, `{{DOMAIN_QUALITY}}` | project type + specs (multi-stack: each stack's hazards under its own sub-bullet) |
@@ -207,8 +257,56 @@ When ADRs exist, use "ADR" wording and list the ADR files as binding context.
 
 ## Step 6 — Write the files (don't clobber blindly)
 
-The target files are `CLAUDE.md`, the worker file(s) — `.claude/agents/worker.md` **or** one
-`.claude/agents/worker-<stack>.md` per stack — `.claude/agents/reviewer.md`, and
+### The `Makefile` — always show it, always ask
+
+**Write the `Makefile` first, and never write it unprompted.** Show the Product Owner the **complete
+proposed file** — whether or not the repo already has one — and ask **apply / edit / skip**
+(AskUserQuestion). It is the one generated file whose contents they are most likely to have opinions
+about, it encodes commands you inferred, and unlike the agent files a wrong recipe fails silently by
+never running a gate.
+
+- **No `Makefile` yet** → show the full proposal; on *apply*, write it.
+- **One exists** → show a **merge**: their file with your additions marked, and say plainly which
+  targets you'd add (usually `validate`, `changes`, the `LABEL_EXIT:` echoes, the gate sets) and which
+  of their recipes you'd leave untouched. **Never rewrite an existing recipe** — if theirs lacks the
+  exit-code echo, propose the echo as an addition to that recipe and let them accept or decline it.
+- **Skip** → generate the rest anyway, but fill `{{BUILD_CMD}}` and friends with the **raw** commands
+  rather than `make` targets, drop the exit-line assertions from `CLAUDE.md` and the agents, and say so
+  in Step 7. Agents pointed at targets that don't exist are worse than agents pointed at real commands.
+
+### Allowlist the gate targets — a separate ask
+
+Once the Makefile is accepted, offer to allowlist its gate targets in **`.claude/settings.json`** (the
+committed, team-wide file — *not* `settings.local.json`, which is gitignored and would only help
+whoever ran scaffold). The generated agents are committed; the permissions they depend on belong beside
+them, reviewable in the same PR.
+
+**Ask separately from the Makefile.** Editing someone's permission config is its own kind of consent,
+and the answers legitimately differ — yes to the Makefile, no to auto-approving it. Show the exact rules
+and ask apply / skip.
+
+- **Exact-match rules, one per gate target** actually emitted:
+  ```
+  "Bash(make build)", "Bash(make test)", "Bash(make format)", "Bash(make lint)",
+  "Bash(make validate)", "Bash(make gates)", "Bash(make changes)"
+  ```
+  plus each additional stack's targets and gate set (`"Bash(make web-build)"`, `"Bash(make gates-web)"`,
+  `"Bash(make gates-all)"`). Omit any target the Makefile doesn't define.
+- **Never `"Bash(make *)"`.** The wildcard sweeps in `publish` and `clean` — the two targets that
+  should still prompt. Exact matches are the whole point: the workflow invokes these targets bare, so
+  nothing broader is needed.
+- **`publish` and `clean` are deliberately excluded.** No agent runs them; they are the Product Owner's.
+- **Merge, never replace.** Read the file first and append to the existing `permissions.allow` array,
+  preserving every rule already there. If `.claude/settings.json` doesn't exist, create it with just the
+  `permissions.allow` key. Leave `.claude/settings.local.json` alone entirely.
+- **Skipped Makefile → skip this too.** Allowlisting targets that don't exist is noise.
+
+Tell the user one thing they won't expect: the agents are told to run gates through **context-mode**
+(`ctx_execute`) for large output, which is a separate MCP tool permission — these Bash rules cover the
+direct invocations, not that path.
+
+Then the rest. The target files are `CLAUDE.md`, the worker file(s) — `.claude/agents/worker.md` **or**
+one `.claude/agents/worker-<stack>.md` per stack — `.claude/agents/reviewer.md`, and
 `.claude/agents/supervisor.md`. For each:
 - If it does **not** exist → write it (create `.claude/agents/` if needed).
 - If it **does** exist → do **not** overwrite silently. Show the user a short diff/summary of what would
@@ -222,6 +320,15 @@ The target files are `CLAUDE.md`, the worker file(s) — `.claude/agents/worker.
 ```
 <!-- dmons-scaffold: <version> -->
 ```
+
+In the `Makefile`, which has no HTML comments, the stamp is a `#` comment on the **first line**:
+
+```
+# dmons-scaffold: <version>
+```
+
+Stamp it only if you wrote or merged into it — a Makefile the Product Owner told you to skip isn't
+yours to stamp.
 
 `<version>` is the `version` field from the plugin's `plugin.json`. Place it **immediately after the
 `OpenSpec Workflow` heading** in `CLAUDE.md` — at whatever level you wrote that heading; when merging
@@ -239,8 +346,14 @@ templates deliberately don't contain it, so strip them clean and add the stamp h
 ## Step 7 — Report
 
 Summarise: which files were written/skipped, the section term chosen, the worker roster (single
-full-stack, or which per-stack workers), the build/test gates wired in, and the binding decisions the
-agents now enforce. Then tell the user the next step: run `/opsx:apply` (or `/opsx:propose` to create a
+full-stack, or which per-stack workers), the **Makefile targets** the agents now run (and any gate the
+audit couldn't derive, so they know what's missing), and the binding decisions the agents now enforce.
+Say explicitly that every gate prints `LABEL_EXIT:<n>` and that the agents are told to quote that code
+rather than read the log — it's the part of this setup a Product Owner won't guess. Report whether the
+gate targets were allowlisted in `.claude/settings.json`, and that `publish`/`clean` were deliberately
+left out so they still prompt. If they skipped the
+Makefile, say the agents are wired to raw commands instead and that `/dmons:update-scaffold` can offer
+it again later. Then tell the user the next step: run `/opsx:apply` (or `/opsx:propose` to create a
 change first), and the Analyst/Architect will drive it **{{UNIT}} by {{UNIT}}, block by block** —
 delegating each block to a `worker` and the `reviewer`, then each finished {{UNIT}} to the
 `supervisor`, all through the shared `DEVLOG.md`.
@@ -256,8 +369,22 @@ rather than by re-running this skill.
 ## Guardrails
 - Never invent binding decisions or ADRs. If the repo has none, say the agents derive their constraints
   from each change's `design.md`, and leave the decisions list lean.
-- Detect build commands; never hard-code `dotnet`/`make` without confirming the repo actually uses it.
-- Always strip template comments and unused optional lines from the generated files.
+- Detect build commands; never hard-code a toolchain without confirming the repo actually uses it. The
+  Makefile's *targets* are fixed by this skill; its *recipes* are always audited.
+- **Raw commands live in the `Makefile` and nowhere else.** Once it's written, `CLAUDE.md` and the
+  agents name `make` targets only. A `dotnet test` left in an agent file is a gate that prints no exit
+  code and drifts the moment the toolchain moves.
+- **Never invent a recipe to fill a target.** A gate you couldn't derive is a question for the Product
+  Owner (Step 4), and a target that would run nothing is worse than an absent one — it reports
+  `EXIT:0` for work it never did.
+- **Never overwrite an existing Makefile recipe**, and never write the Makefile without showing it in
+  full and getting an explicit apply (Step 6).
+- **Never widen a permission beyond the gate targets.** The allowlist is exact-match rules for targets
+  the Makefile actually defines — never `Bash(make *)`, never `publish`/`clean`, never a rule the
+  workflow doesn't need. And always merge into `permissions.allow`; replacing that array would silently
+  drop whatever the project had already approved.
+- Always strip template comments and unused optional lines from the generated files — `<!-- ... -->`
+  everywhere, `#!!` lines in the `Makefile`, whose plain `#` comments stay.
 - The generated CLAUDE.md's "OpenSpec Workflow" section is authoritative and must keep its
   structure — tailor the commands, nouns, and worker roster, not the workflow shape (Analyst/Architect
   + Product Owner roles, the two nested loops, the {{UNIT}} review that closes the outer one, shared
