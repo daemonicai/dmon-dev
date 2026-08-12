@@ -57,6 +57,9 @@ differently, and the drift shows up as agents that no longer agree with each oth
    - **Stamp present** → that's the source version. Apply every migration **after** it, in order.
    - **No stamp** → the repo predates stamping (0.2.x or earlier). Feature-detect instead: a scaffolded
      repo with **no `.claude/agents/supervisor.md`** is pre-0.3.0. Treat the source version as `0.2.x`.
+   - From **0.4.0** the scaffold also owns a root **`Makefile`**, stamped as a `#` comment on its first
+     line. A scaffolded repo whose `CLAUDE.md` names raw toolchain commands (`dotnet build`) rather
+     than `make` targets is pre-0.4.0, whatever else it has.
 3. **Target version** = the plugin version in `${CLAUDE_PLUGIN_ROOT}/../.claude-plugin/plugin.json`
    (or `plugin.json` at the plugin root).
 4. **Already current?** If the stamp equals the target, say so and stop — offer `/dmons:scaffold` only
@@ -82,7 +85,8 @@ need. Typical harvest (the migration notes name what each one needs):
 |-------|--------------|
 | The `{{UNIT}}` term actually in use (*section* / *group*) | `CLAUDE.md` §3 headings and `tasks.md` |
 | Project name, description, tagline | `CLAUDE.md` header |
-| Build / test / format commands and the gate list | `CLAUDE.md` "Commands" and the gates in §3 |
+| Build / test / format / lint commands and the gate list | `CLAUDE.md` "Commands" and the gates in §3 — **raw toolchain commands** in a pre-0.4.0 repo, `make` targets after |
+| Existing `Makefile` targets and recipes | `./Makefile`, if there is one — its recipes are the project's own and outrank anything you would infer |
 | Binding decisions, and the nouns used for them | `reviewer.md` / `worker*.md` decisions section |
 | Domain hazards, style bullets, language idioms | `reviewer.md`, `worker*.md` |
 | Worker roster — single or per-stack, and the names | `.claude/agents/worker*.md` |
@@ -138,6 +142,15 @@ Follow each migration note exactly. General rules:
   show the user both, and let them decide.
 - **New agent files get the full treatment** — fill every slot, strip every guidance comment, exactly as
   `/dmons:scaffold` Step 5 requires. A half-filled agent is worse than no agent.
+- **Permission rules are merged, never replaced.** When a migration adds gate targets to
+  `.claude/settings.json`, read the file first and append to `permissions.allow` — an already-scaffolded
+  repo has rules there that a wholesale write would silently drop. Ask for this separately from the
+  Makefile; consent to a build file is not consent to edit a permission config.
+- **The `Makefile` is the project's file, not the scaffold's.** Never rewrite a recipe the repo already
+  has; propose additions (missing targets, the `LABEL_EXIT:` echo, the gate sets) and let the Product
+  Owner accept or decline each. Show the complete proposed file before writing it, exactly as
+  `/dmons:scaffold` Step 6 requires — and if they decline, the migrations that re-point the agents at
+  `make` targets must be skipped too, or you'll leave every agent calling a target that doesn't exist.
 
 ## Step 6 — Stamp
 
@@ -148,6 +161,9 @@ After the migrations are applied, write the provenance stamp into **every file t
 ```
 <!-- dmons-scaffold: <version> -->
 ```
+
+From 0.4.0 that includes the root `Makefile`, where the stamp is a `#` comment on the **first line**
+(`# dmons-scaffold: <version>`) — but only if the Product Owner accepted it.
 
 - **All migrations applied** → stamp the target version.
 - **Some skipped** → stamp the **last fully-applied version**, and tell the user which migrations were

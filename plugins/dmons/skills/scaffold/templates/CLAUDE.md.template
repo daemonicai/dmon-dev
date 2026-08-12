@@ -38,13 +38,37 @@ thread in a chat room. Conventions:
 
 Read it to pick up in-flight context; write to it as you act. The `/devlog` skill maintains it.
 
-### Commands
+### Commands — the Makefile is the command surface
 
-- Build: `{{BUILD_CMD}}` — must be clean.
-- Test: `{{TEST_CMD}}` — all green.
-{{FORMAT_COMMAND_LINE}}<!-- e.g. "- Format: `dotnet format --verify-no-changes` — clean." Delete this line if the project has no format gate. -->
-- Validate a change: `openspec validate <change-name> --strict`.
-- List changes: `openspec list` (or the directories under `openspec/changes/`, excluding `archive/`).
+Every gate runs through the root **`Makefile`**. Build, test, format, lint, and spec validation are
+`make` targets; **do not call the underlying toolchain directly**. That keeps the command names stable
+as the toolchain moves underneath them, and — the load-bearing part — **every gate target prints its
+own exit code** as `LABEL_EXIT:<n>` on its last line.
+
+**Read the exit line, not the output.** A gate passed only if you saw `BUILD_EXIT:0`. Tools routinely
+exit non-zero while printing output that scans exactly like a clean run, and a gate has been reported
+as passing on that basis before. Quote the code; don't interpret the log.
+
+- Build: `{{BUILD_CMD}}` → `BUILD_EXIT:0`.
+- Test: `{{TEST_CMD}}` → `TEST_EXIT:0`, all green.
+{{FORMAT_COMMAND_LINE}}<!-- e.g. "- Format: `make format` → `FORMAT_EXIT:0`." Delete this line if the project has no format gate. -->
+{{LINT_COMMAND_LINE}}<!-- e.g. "- Lint: `make lint` → `LINT_EXIT:0`." Only when the project has a linter distinct from its formatter; delete otherwise. -->
+- Validate the active change(s): `{{VALIDATE_CMD}}` → `VALIDATE_EXIT:0`.
+- Whole gate set in one pass: `{{GATES_CMD}}` → `GATES_EXIT:0`. It runs the set with `-k`, so one
+  invocation reports **every** failing gate instead of hiding the rest behind the first.
+{{EXTRA_STACK_COMMAND_LINES}}<!-- Multi-stack only: one line per additional stack's gate set, e.g.
+  "- Frontend gates: `make gates-web` → `GATES_WEB_EXIT:0` (targets `web-build`, `web-test`)."
+  Plus "- Every stack at once: `make gates-all` → `GATES_ALL_EXIT:0`." Delete for a single stack. -->
+- List active changes: `make changes` (or the directories under `openspec/changes/`, excluding
+  `archive/`).
+
+`make publish` and `make clean` are **not** gates and no agent runs them — they are the Product
+Owner's.
+
+**The Makefile is yours (Architect), not the workers'.** When a block adds a project, a test suite, or
+a stack that the existing targets don't cover, *you* update the Makefile and say so in the DEVLOG. A
+worker that needs a target changed stops and reports it; it does not edit the Makefile, and it does not
+route around it by calling the raw toolchain.
 
 ---
 
@@ -164,11 +188,18 @@ see the {{UNIT}} as a whole. Post it **before** any block of the {{UNIT}} is com
    scope, {{LANG}} idiom, {{DOMAIN_QUALITY}}). The reviewer posts its verdict to the DEVLOG.
 4. **Review loop.** Worker and reviewer resolve findings **in the DEVLOG thread** — reviewer posts
    findings, worker fixes and responds, reviewer re-audits. **Repeat until the reviewer signs off.**
-5. **Gates — all must pass before ticking any box:**
-   - `{{BUILD_CMD}}` clean (no errors)
-   - `{{TEST_CMD}}` green — the block's new tests **and** all existing tests
-   - `openspec validate <change-name> --strict`
-{{FORMAT_GATE_LINE}}<!-- e.g. "   - `dotnet format --verify-no-changes` clean" — delete if no format gate -->
+5. **Gates — all must pass before ticking any box.** Run each and **read its exit line**; a gate
+   passed only when you saw its `LABEL_EXIT:0`:
+   - `{{BUILD_CMD}}` → `BUILD_EXIT:0` (no errors)
+   - `{{TEST_CMD}}` → `TEST_EXIT:0` — the block's new tests **and** all existing tests
+{{FORMAT_GATE_LINE}}<!-- e.g. "   - `make format` → `FORMAT_EXIT:0`" — delete if no format gate -->
+{{LINT_GATE_LINE}}<!-- e.g. "   - `make lint` → `LINT_EXIT:0`" — delete unless the project has a linter distinct from its formatter -->
+   - `{{VALIDATE_CMD}}` → `VALIDATE_EXIT:0`
+
+   `{{GATES_CMD}}` runs the whole set in one `-k` pass and is the quickest way to get the full
+   picture — but a green `GATES_EXIT:0` is what you're after, and a red one still needs the
+   individual exit lines to say which gate failed. Never conclude a gate passed from reading its
+   output; quote the code.
    A block commits green. If a block must land with a failing test for a sound technical reason (e.g. a
    red test a later block in the same {{UNIT}} turns green), that is a deliberate Architect call — state
    the reason in the DEVLOG **and** the commit body. Otherwise a failed gate sends you back to step 4,

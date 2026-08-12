@@ -69,10 +69,37 @@ opinions and states them** — but earns them:
    recommendation with reasons → the Product Owner's call. Push back once if you disagree; defer if they
    insist. Don't over-decide: settle what shapes the change now; leave genuinely deferrable details to
    `opsx:propose` and later.
-5. **Record the decisions** (see below).
-6. **Hand off to `opsx:propose`.** With the technology settled, carry the decisions into `opsx:propose`
+5. **Settle the gate commands** (see below) — the concrete build/test/format/lint commands your stack
+   choice implies. They're the last mile of the tooling decision, not a separate exercise.
+6. **Record the decisions** (see below).
+7. **Hand off to `opsx:propose`.** With the technology settled, carry the decisions into `opsx:propose`
    to shape the change — proposal, `design.md`, `tasks.md`. The decisions you made become that change's
    binding technical constraints.
+
+## The command surface — every project gets a Makefile
+
+The Apply Workflow runs **every gate through a root `Makefile`**: `build`, `test`, `format` (a check,
+never a rewrite), `lint` where the stack has one distinct from its formatter, plus the OpenSpec-common
+`validate`. Each target prints its own exit code as `LABEL_EXIT:<n>` and exits with it, so an agent
+quotes a code instead of interpreting a log. `/dmons:scaffold` generates that Makefile — but it can only
+wrap commands **you** decided.
+
+**This is a constraint on your choices, not just paperwork.** As you settle each stack, pin down:
+
+- the **exact command** for build, test, format, and lint — the real invocation, including any working
+  directory or prefix (`npm --prefix web run build`), not "we'll use vitest";
+- that each one **runs non-interactively and exits non-zero on failure**. A gate that needs a TTY, waits
+  for input, or always exits 0 can't gate anything;
+- that the formatter has a **check mode** (`--verify-no-changes`, `--check`). A formatter that can only
+  rewrite in place turns a gate into an unreviewed edit;
+- whether there's a real **publish** command (a package, a container, a release binary) — `make publish`
+  exists only where the project genuinely ships an artefact;
+- for a multi-stack project, the **short name** of each stack. It becomes the target prefix
+  (`web-build`), the exit label (`WEB_BUILD_EXIT`), and the worker name (`worker-web`), so pick it here
+  and keep it consistent.
+
+If a candidate toolchain can't offer a clean non-interactive gate, that is **evidence against it** —
+raise it as a trade-off while the decision is still open, not after scaffold hits it.
 
 ## Recording the decisions
 
@@ -80,6 +107,10 @@ opinions and states them** — but earns them:
   alternatives rejected. This is what `opsx:propose` produces and what `/dmons:scaffold` later audits as
   the change's **binding decisions**. A decision the Product Owner made against your recommendation still
   goes here — with their rationale and your flagged trade-off recorded.
+- **The gate commands go in `design.md ## Decisions` too**, written out verbatim, one line per stack per
+  gate. `/dmons:scaffold` harvests them to fill the Makefile's recipes; anything you leave unrecorded it
+  has to infer from the repo or ask the Product Owner about again. Note the check-mode flag explicitly —
+  `dotnet format --verify-no-changes`, not `dotnet format`.
 - **ADRs for the load-bearing, hard-to-reverse choices** — write a standalone `docs/adrs/ADR-NNNN-*.md`
   (match the repo's existing ADR convention if one exists; otherwise establish this path) for the
   foundational calls that are expensive to undo: platform, primary language, the core framework, the
@@ -92,9 +123,9 @@ opinions and states them** — but earns them:
 
 Once `opsx:propose` has produced the change, tell the Product Owner the path forward:
 
-> Technology decided and the change proposed. Next: **`/dmons:scaffold`** to generate the
-> `worker`/`reviewer` Apply Workflow agents (they'll enforce these decisions and ADRs), then
-> **`/opsx:apply`** to build it block by block.
+> Technology decided and the change proposed. Next: **`/dmons:scaffold`** to generate the `Makefile`
+> command surface and the `worker`/`reviewer`/`supervisor` Apply Workflow agents (they'll enforce these
+> decisions and ADRs), then **`/opsx:apply`** to build it block by block.
 
 ## Guardrails
 
@@ -108,5 +139,9 @@ Once `opsx:propose` has produced the change, tell the Product Owner the path for
   Product Owner insists, record their decision and move on — don't relitigate.
 - **Reserve ADRs for the load-bearing calls.** Foundational, hard-to-reverse decisions get an ADR;
   everything else lives in `design.md ## Decisions`.
+- **No stack is decided until its gates are.** "TypeScript with Vite" isn't a decision the Apply Workflow
+  can act on; `npm --prefix web run build` / `npm --prefix web test` / `npx prettier --check .` is. Don't
+  hand off to `opsx:propose` with the commands still vague — scaffold will have to guess, and a guessed
+  recipe fails silently by never running a gate.
 - **Don't build.** This skill decides and records the *how*; implementation is the Apply Workflow's job,
   after `scaffold`.

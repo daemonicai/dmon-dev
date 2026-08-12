@@ -33,10 +33,12 @@ Then, in a target repo that already has `openspec/` set up:
 /dmons:scaffold
 ```
 
-The skill audits the repo's specs and changes and writes `CLAUDE.md`, the worker file(s)
+The skill audits the repo's specs and changes and writes a `Makefile`, `CLAUDE.md`, the worker file(s)
 (`.claude/agents/worker.md`, or one `worker-<stack>.md` per tech stack), `.claude/agents/reviewer.md`, and
 `.claude/agents/supervisor.md` — each tailored to that project's tech stack, build gates, and binding
-decisions. The generated `CLAUDE.md` casts the main thread as an **Analyst/Architect** working for you
+decisions. The `Makefile` is the command surface every agent runs its gates through, and each gate target
+prints its own exit code (`BUILD_EXIT:0`) so a result is quoted rather than read out of a log. The
+generated `CLAUDE.md` casts the main thread as an **Analyst/Architect** working for you
 (the **Product Owner**) and drives apply as **two nested loops**: blocks go worker → reviewer → commit,
 and each finished section gets a whole-section audit from the `supervisor` before the next one opens —
 all coordinated through a shared `DEVLOG.md`.
