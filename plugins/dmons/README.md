@@ -67,9 +67,10 @@ to the project by auditing its OpenSpec specs and changes:
   agent's calls and never the Architect's: it blocks git writes, edits to `tasks.md` / `Makefile` /
   `CLAUDE.md` / `.claude/`, and any attempt to spawn another agent — across Bash *and* the `ctx_*` tools,
   which run commands too. The auditors are confined further, to writing `DEVLOG.md` and nothing else.
-  The tripwire brackets the Architect's agent calls, recording `HEAD` and each change's tick count before
-  and after, so anything the guard didn't cover still surfaces immediately. Between them, "the worker
-  doesn't commit and doesn't tick boxes" stops being a request.
+  The tripwire brackets each agent's run — `SubagentStart` to `SubagentStop`, recording `HEAD` and each
+  change's tick count at both ends — and reports anything that moved to the Architect at the end of its
+  turn, so what the guard didn't cover still surfaces. Between them, "the worker doesn't commit and
+  doesn't tick boxes" stops being a request.
 - `CLAUDE.md` — **Analyst/Architect** instructions: a project header plus the authoritative *OpenSpec
   Workflow*. The main thread is cast as the Analyst/Architect (Analyst hat during `opsx:explore`,
   Architect hat during `opsx:propose` and apply), working for you — the **Product Owner** — to realise

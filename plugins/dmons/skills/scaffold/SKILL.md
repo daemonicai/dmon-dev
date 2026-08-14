@@ -328,8 +328,11 @@ Write both scripts to `.claude/hooks/`, stripped of their `#!!` lines and otherw
 - `dmons-guard.sh` — the `PreToolUse` guard. It is wired from **each agent's own frontmatter** (already
   in the templates), so it only ever sees that agent's calls. Workers pass the role `worker`; the
   reviewer and supervisor pass `auditor`.
-- `dmons-tripwire.sh` — the before/after check around the Architect's Agent calls. This one is wired in
-  **`.claude/settings.json`**, because it has to run in the Architect's own session.
+- `dmons-tripwire.sh` — the before/after check around each agent's **run**, not around the Architect's
+  Agent call: agents run in the background, so the call returns at launch and a `PreToolUse`/`PostToolUse`
+  pair around it measures an empty window. It brackets `SubagentStart`/`SubagentStop` instead and reports
+  on `Stop`. Wired in **`.claude/settings.json`**, because the reporting half has to run in the
+  Architect's own session — that is the only session it is allowed to speak into.
 
 Four things to get right, in order:
 
@@ -343,12 +346,17 @@ Four things to get right, in order:
    ask apply / skip. **Merge into the existing file**; never replace it.
    ```json
    { "hooks": {
-       "PreToolUse":  [ { "matcher": "Agent|Task", "hooks": [ { "type": "command",
-           "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/dmons-tripwire.sh\" pre"  } ] } ],
-       "PostToolUse": [ { "matcher": "Agent|Task", "hooks": [ { "type": "command",
-           "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/dmons-tripwire.sh\" post" } ] } ]
+       "SubagentStart": [ { "matcher": "^(worker|worker-.+|reviewer|supervisor)$", "hooks": [ { "type": "command",
+           "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/dmons-tripwire.sh\" start" } ] } ],
+       "SubagentStop":  [ { "matcher": "^(worker|worker-.+|reviewer|supervisor)$", "hooks": [ { "type": "command",
+           "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/dmons-tripwire.sh\" stop" } ] } ],
+       "Stop":          [ { "hooks": [ { "type": "command",
+           "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/dmons-tripwire.sh\" report" } ] } ]
    } }
    ```
+   The matcher is a regex over the **agent type** — the `name:` in each agent file's frontmatter, not the
+   filename. If you generated workers under other names, widen the alternation to match and say which
+   names you used; a matcher that misses is silent. `Stop` takes no matcher.
    Add `.claude/.dmons-tripwire/` to `.gitignore` — that's the scratch directory it snapshots into.
    Declining this is fine: the guard still does the preventing. Say which half they now have.
 4. **Frontmatter hooks need the workspace trusted.** Claude Code skips a project-level agent's
