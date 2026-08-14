@@ -1,6 +1,6 @@
 {
   "name": "dmon-dev",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Claude Code plugins for the dmon family of repos — OpenSpec orchestration agents and project instructions.",
   "license": "MPL-2.0",
   "owner": {
@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "dmons",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "description": "OpenSpec workflow tooling: runs greenfield discovery (requirements-gathering as the Analyst), drives architecture decisions (the technology choices as the Architect), scaffolds the Apply Workflow (a Makefile command surface whose gate targets report their own exit codes, an Analyst/Architect CLAUDE.md, plus one or more worker subagents, a per-block reviewer, and a per-section supervisor, with hook-enforced boundaries so only the Architect commits, ticks tasks, and invokes agents), migrates already-scaffolded repos onto newer versions, and maintains a change's shared DEVLOG.md channel.",
       "source": "./plugins/dmons",
       "author": {

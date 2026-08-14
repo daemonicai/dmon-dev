@@ -64,6 +64,10 @@ differently, and the drift shows up as agents that no longer agree with each oth
      **`.claude/hooks/dmons-tripwire.sh`**, each stamped on its second line (the shebang keeps the
      first). A scaffolded repo whose agent files carry no `hooks:` frontmatter is pre-0.5.0 — which
      means its agents are enforcing nothing, whatever their Boundaries sections say.
+   - From **0.5.1** the tripwire is wired on `SubagentStart`/`SubagentStop`/`Stop`. A repo whose
+     `.claude/settings.json` still calls `dmons-tripwire.sh` from `PreToolUse`/`PostToolUse` is on the
+     0.5.0 wiring, and its tripwire has never fired — treat that as pre-0.5.1 even if the stamp says
+     otherwise, and tell the user their detection has been inert, not clean.
 3. **Target version** = the plugin version in `${CLAUDE_PLUGIN_ROOT}/../.claude-plugin/plugin.json`
    (or `plugin.json` at the plugin root).
 4. **Already current?** If the stamp equals the target, say so and stop — offer `/dmons:scaffold` only

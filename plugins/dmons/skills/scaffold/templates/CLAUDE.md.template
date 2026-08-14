@@ -81,10 +81,11 @@ that only exists as prose is one an agent under pressure to finish a block will 
   `Makefile`, `CLAUDE.md` and `.claude/`, and any attempt to spawn another agent — across Bash *and*
   the `ctx_*` tools, since those run commands too. The auditors (`reviewer`, `supervisor`) are further
   confined to writing `DEVLOG.md` and nothing else.
-- **`.claude/hooks/dmons-tripwire.sh`** — a `PreToolUse`/`PostToolUse` pair on **your** Agent calls. It
-  records `HEAD` and each active change's tick count before an agent starts and re-checks after it
-  returns, so anything the guard didn't catch still surfaces — in your context, immediately, instead of
-  in a commit log nobody reads.
+- **`.claude/hooks/dmons-tripwire.sh`** — it records `HEAD` and each active change's tick count when an
+  agent spawns, re-checks both when that agent finishes, and reports any movement to you at the end of
+  your turn. Anything the guard didn't catch still surfaces — in your context, instead of in a commit log
+  nobody reads. Agents run in the background, so this is deliberately not tied to the moment your `Agent`
+  call returns: that moment is the launch, not the finish.
 
 **When the tripwire fires, it is telling you the block skipped a gate.** Don't accept the state and move
 on: read what landed, then `git reset --soft <the sha it names>` to put the work back in the tree
@@ -209,8 +210,8 @@ see the {{UNIT}} as a whole. Post it **before** any block of the {{UNIT}} is com
    {{UNIT}}): the block's tasks (`N.1`…`N.k`), the relevant spec excerpts, the {{DECISIONS_NOUN}} that
    bind them, and the done-gates below. The worker shouldn't need to go hunting.
 2. **Worker implements the block** and reports back, posting to the DEVLOG as it goes. If the boundary
-   tripwire fired on its return, deal with that **before** step 3 — an unreviewed, ungated commit is
-   not a starting point for a review.
+   tripwire reports at the end of your turn, deal with that **before** step 3 — an unreviewed, ungated
+   commit is not a starting point for a review.
 3. **Audit.** Spawn `reviewer` on the block diff (correctness, {{COMPLIANCE_NOUN}} compliance, OpenSpec
    scope, {{LANG}} idiom, {{DOMAIN_QUALITY}}). The reviewer posts its verdict to the DEVLOG.
 4. **Review loop.** Worker and reviewer resolve findings **in the DEVLOG thread** — reviewer posts
