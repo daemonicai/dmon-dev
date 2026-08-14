@@ -30,10 +30,20 @@ changes:
   even with per-stack workers. Runs once all a section's blocks have landed and is the only agent that
   ever sees more than one block: cross-block drift, duplicated abstractions, dead scaffolding, and
   whether the section genuinely satisfies its spec rather than merely ticking its tasks.
+- `.claude/hooks/dmons-guard.sh` + `.claude/hooks/dmons-tripwire.sh` — the **boundary hooks**. Copied
+  verbatim (they hold no audited values), they turn the agents' Boundaries sections from prose into
+  something the harness enforces: the guard blocks the calls, the tripwire catches what the guard
+  couldn't see. Step 6 wires them.
 
 **The model split is deliberate.** The worker and reviewer run on every block, so they are the hot path
 and stay on sonnet; the supervisor runs once per section and carries opus. Preserve this when
 generating — a supervisor on a weaker model removes the workflow's only cross-block check.
+
+**The boundary hooks are not optional decoration.** The workflow's correctness rests on three things
+belonging to the Architect alone — the commits, the ticked boxes, and the decision to invoke an agent —
+and prose alone does not hold them: a worker that has just finished a block will sometimes tick its own
+tasks and commit its own work, which lands code no gate ever ran. Generate the hooks, and keep the
+`disallowedTools` and `hooks:` frontmatter in every agent file exactly as the templates set it.
 
 The skill does **not** install OpenSpec, the `/opsx:*` commands, or the `openspec-*` skills — those come
 from the `openspec` CLI (`openspec init`). It only produces the orchestration layer that wraps them.
@@ -46,12 +56,18 @@ project should already have at least one change carrying the decisions the agent
 doesn't, that's the signal to run discovery and architecture first (see Step 1).
 
 The templates live at `${CLAUDE_PLUGIN_ROOT}/skills/scaffold/templates/` — `Makefile.template`,
-`CLAUDE.md.template`, `worker.md.template`, `reviewer.md.template`, `supervisor.md.template`. They are
+`CLAUDE.md.template`, `worker.md.template`, `reviewer.md.template`, `supervisor.md.template`,
+`dmons-guard.sh.template`, `dmons-tripwire.sh.template`. They are
 annotated skeletons with `{{PLACEHOLDER}}` slots
 and guidance comments — `<!-- ... -->` in the markdown templates, `#!!`-prefixed lines in
-`Makefile.template` (a Makefile has no HTML comments, and its plain `#` comments are part of the
-generated output). Your job is to fill every slot from the audit and **delete every guidance comment**
-before writing the final files.
+`Makefile.template` and the two `.sh.template` files (neither has HTML comments, and their plain `#`
+comments are part of the generated output). Your job is to fill every slot from the audit and **delete
+every guidance comment** before writing the final files.
+
+**The two shell templates are the exception to all of that**: they carry no `{{PLACEHOLDER}}` at all.
+Copy them through verbatim minus the `#!!` lines. Do not "adapt them to the project" — a guard tuned
+per repo is a guard nobody can reason about, and every hole in one is a rule that silently stopped
+applying.
 
 ---
 
@@ -305,6 +321,44 @@ Tell the user one thing they won't expect: the agents are told to run gates thro
 (`ctx_execute`) for large output, which is a separate MCP tool permission — these Bash rules cover the
 direct invocations, not that path.
 
+### The boundary hooks — copy, `chmod`, wire, verify
+
+Write both scripts to `.claude/hooks/`, stripped of their `#!!` lines and otherwise **verbatim**:
+
+- `dmons-guard.sh` — the `PreToolUse` guard. It is wired from **each agent's own frontmatter** (already
+  in the templates), so it only ever sees that agent's calls. Workers pass the role `worker`; the
+  reviewer and supervisor pass `auditor`.
+- `dmons-tripwire.sh` — the before/after check around the Architect's Agent calls. This one is wired in
+  **`.claude/settings.json`**, because it has to run in the Architect's own session.
+
+Four things to get right, in order:
+
+1. **`chmod +x` both files.** A hook script without the execute bit doesn't block anything — it fails,
+   and a failing `PreToolUse` hook is not a denial. Verify it (`test -x`), don't assume it.
+2. **They need `jq`.** The guard fails *closed* without it, so a machine with no `jq` will block every
+   agent tool call with a clear message rather than waving them through. Say so in Step 7; it is the
+   one way this setup can be loudly annoying.
+3. **Wire the tripwire — a separate ask, like the allowlist.** This adds a `hooks` key to the committed
+   `.claude/settings.json`, which is a bigger consent than a permission rule: show the exact JSON and
+   ask apply / skip. **Merge into the existing file**; never replace it.
+   ```json
+   { "hooks": {
+       "PreToolUse":  [ { "matcher": "Agent|Task", "hooks": [ { "type": "command",
+           "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/dmons-tripwire.sh\" pre"  } ] } ],
+       "PostToolUse": [ { "matcher": "Agent|Task", "hooks": [ { "type": "command",
+           "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/dmons-tripwire.sh\" post" } ] } ]
+   } }
+   ```
+   Add `.claude/.dmons-tripwire/` to `.gitignore` — that's the scratch directory it snapshots into.
+   Declining this is fine: the guard still does the preventing. Say which half they now have.
+4. **Frontmatter hooks need the workspace trusted.** Claude Code skips a project-level agent's
+   `hooks:` block until the folder containing it has been trusted, and it does so *quietly* — the agent
+   still runs, unguarded. Tell the user to accept the workspace trust prompt, and give them the
+   30-second check in Step 7.
+
+**Never weaken a guard to make a block pass.** If the guard blocks something an agent legitimately
+needs, that is a finding about the workflow, not a line to delete: bring it to the Product Owner.
+
 Then the rest. The target files are `CLAUDE.md`, the worker file(s) — `.claude/agents/worker.md` **or**
 one `.claude/agents/worker-<stack>.md` per stack — `.claude/agents/reviewer.md`, and
 `.claude/agents/supervisor.md`. For each:
@@ -326,6 +380,9 @@ In the `Makefile`, which has no HTML comments, the stamp is a `#` comment on the
 ```
 # dmons-scaffold: <version>
 ```
+
+In the two hook scripts the shebang must stay first, so the stamp is the **second** line, directly
+below `#!/usr/bin/env bash`.
 
 Stamp it only if you wrote or merged into it — a Makefile the Product Owner told you to skip isn't
 yours to stamp.
@@ -357,6 +414,18 @@ it again later. Then tell the user the next step: run `/opsx:apply` (or `/opsx:p
 change first), and the Analyst/Architect will drive it **{{UNIT}} by {{UNIT}}, block by block** —
 delegating each block to a `worker` and the `reviewer`, then each finished {{UNIT}} to the
 `supervisor`, all through the shared `DEVLOG.md`.
+
+Report the **boundary hooks** plainly, because they change what the agents can physically do:
+
+- what the guard blocks (git writes, `tasks.md`, the `Makefile`, `CLAUDE.md`/`.claude/`, spawning
+  agents — across Bash *and* the `ctx_*` tools), that the auditors can write only `DEVLOG.md`, and that
+  none of it constrains the Architect;
+- whether they took the tripwire, and that without it they have prevention but no detection;
+- that both need `jq`, and that the guard fails closed without it;
+- **the 30-second verification**, which is worth doing once: ask a worker to commit something. It
+  should come back with `BLOCKED by the OpenSpec Apply Workflow` rather than a commit. If it commits,
+  the frontmatter hooks are being skipped — almost always an untrusted workspace or a missing execute
+  bit — and every agent is running unguarded.
 
 Mention the cost shape explicitly, since it's the thing they'll feel: worker and reviewer are sonnet
 and run per block; the supervisor is opus and runs once per {{UNIT}} (twice if it requests changes).
@@ -390,6 +459,15 @@ rather than by re-running this skill.
   + Product Owner roles, the two nested loops, the {{UNIT}} review that closes the outer one, shared
   DEVLOG).
 - Keep the models as the templates set them: `worker` sonnet, `reviewer` sonnet, `supervisor` opus.
+- **Copy the hook scripts verbatim and never soften one.** They carry no audited values, so there is
+  nothing to tailor; a repo-specific guard is a guard with repo-specific holes. If one blocks something
+  an agent genuinely needs, that's a question for the Product Owner and a fix upstream in the plugin,
+  not a local edit.
+- **Never drop the `disallowedTools` or `hooks:` frontmatter** from a generated agent, and never point
+  an agent's guard at the wrong role — a `reviewer` wired as `worker` can edit the whole tree, which is
+  precisely the review it was meant not to have.
+- **`chmod +x` is part of writing the hooks**, not an afterthought. A non-executable guard blocks
+  nothing and says nothing; the workflow looks identical right up until an agent commits.
 - Keep the reviewer diff-local and the supervisor cross-block. If you find yourself writing the same
   check into both files, it belongs in the reviewer only — a supervisor that re-runs block review is
   an expensive no-op, which is the main way this workflow degrades.

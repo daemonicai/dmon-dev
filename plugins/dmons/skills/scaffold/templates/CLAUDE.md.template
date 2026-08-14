@@ -70,6 +70,30 @@ a stack that the existing targets don't cover, *you* update the Makefile and say
 worker that needs a target changed stops and reports it; it does not edit the Makefile, and it does not
 route around it by calling the raw toolchain.
 
+### Boundaries — enforced by hooks, not by trust
+
+Three things belong to you alone: **the commits, the ticked boxes, and the decision to invoke an
+agent.** Those rules are written into every agent's prompt, and they are also enforced, because a rule
+that only exists as prose is one an agent under pressure to finish a block will eventually break.
+
+- **`.claude/hooks/dmons-guard.sh`** — a `PreToolUse` hook wired into each agent's own frontmatter, so
+  it sees that agent's tool calls and never yours. It blocks git writes, edits to `tasks.md`, the
+  `Makefile`, `CLAUDE.md` and `.claude/`, and any attempt to spawn another agent — across Bash *and*
+  the `ctx_*` tools, since those run commands too. The auditors (`reviewer`, `supervisor`) are further
+  confined to writing `DEVLOG.md` and nothing else.
+- **`.claude/hooks/dmons-tripwire.sh`** — a `PreToolUse`/`PostToolUse` pair on **your** Agent calls. It
+  records `HEAD` and each active change's tick count before an agent starts and re-checks after it
+  returns, so anything the guard didn't catch still surfaces — in your context, immediately, instead of
+  in a commit log nobody reads.
+
+**When the tripwire fires, it is telling you the block skipped a gate.** Don't accept the state and move
+on: read what landed, then `git reset --soft <the sha it names>` to put the work back in the tree
+without the agent's commit, untick anything you didn't tick, and run the block through the rest of the
+loop — reviewer, gates, your tick, your commit. Record it in the DEVLOG. The work is often fine; the
+problem is that nothing verified it, and that's exactly what the loop exists to do.
+
+Neither hook constrains you. You commit, you tick, you spawn the agents.
+
 ---
 
 # OpenSpec Workflow
@@ -117,7 +141,8 @@ never spawn each other or any other subagent — they report back to you and you
 Every handoff in the DEVLOG (`→ @reviewer`, `❓ @architect`) is a *post*, not an invocation: the
 reviewer runs when **you** spawn it, the supervisor runs when **you** spawn it at {{UNIT}} end. This
 keeps one thread holding the whole picture — if an agent could call the next one, the workflow's loops
-would run without you and the gates, ticks, and commits you own would be skipped.
+would run without you and the gates, ticks, and commits you own would be skipped. The agents have no
+Agent tool at all, so this is a fact about them rather than an instruction to them.
 
 All agents are defined for this repo. Delegate; don't shortcut by writing the implementation yourself.
 
@@ -183,7 +208,9 @@ see the {{UNIT}} as a whole. Post it **before** any block of the {{UNIT}} is com
 1. **Brief the worker.** Post the brief to the DEVLOG (`[architect]`, under the block's `## N.`
    {{UNIT}}): the block's tasks (`N.1`…`N.k`), the relevant spec excerpts, the {{DECISIONS_NOUN}} that
    bind them, and the done-gates below. The worker shouldn't need to go hunting.
-2. **Worker implements the block** and reports back, posting to the DEVLOG as it goes.
+2. **Worker implements the block** and reports back, posting to the DEVLOG as it goes. If the boundary
+   tripwire fired on its return, deal with that **before** step 3 — an unreviewed, ungated commit is
+   not a starting point for a review.
 3. **Audit.** Spawn `reviewer` on the block diff (correctness, {{COMPLIANCE_NOUN}} compliance, OpenSpec
    scope, {{LANG}} idiom, {{DOMAIN_QUALITY}}). The reviewer posts its verdict to the DEVLOG.
 4. **Review loop.** Worker and reviewer resolve findings **in the DEVLOG thread** — reviewer posts

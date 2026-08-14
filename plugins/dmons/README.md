@@ -60,7 +60,16 @@ to the project by auditing its OpenSpec specs and changes:
 - `.claude/settings.json` — the gate targets, offered as exact-match permission rules (`Bash(make test)`)
   merged into `permissions.allow`, so the workflow's gates stop prompting. Committed, so the whole team
   gets them alongside the committed agents. Asked separately from the Makefile, and `publish`/`clean` are
-  deliberately left out so they still prompt.
+  deliberately left out so they still prompt. Also where the boundary tripwire is wired, asked separately
+  again.
+- `.claude/hooks/dmons-guard.sh` + `.claude/hooks/dmons-tripwire.sh` — the **boundary hooks**, copied
+  verbatim. The guard is a `PreToolUse` hook wired into each agent's own frontmatter, so it sees that
+  agent's calls and never the Architect's: it blocks git writes, edits to `tasks.md` / `Makefile` /
+  `CLAUDE.md` / `.claude/`, and any attempt to spawn another agent — across Bash *and* the `ctx_*` tools,
+  which run commands too. The auditors are confined further, to writing `DEVLOG.md` and nothing else.
+  The tripwire brackets the Architect's agent calls, recording `HEAD` and each change's tick count before
+  and after, so anything the guard didn't cover still surfaces immediately. Between them, "the worker
+  doesn't commit and doesn't tick boxes" stops being a request.
 - `CLAUDE.md` — **Analyst/Architect** instructions: a project header plus the authoritative *OpenSpec
   Workflow*. The main thread is cast as the Analyst/Architect (Analyst hat during `opsx:explore`,
   Architect hat during `opsx:propose` and apply), working for you — the **Product Owner** — to realise
@@ -96,6 +105,11 @@ a `fix(...)` commit with the DEVLOG as its record.
 
 The model split is deliberate: worker and reviewer run on **every block**, so they stay on Sonnet; the
 supervisor runs **once per section** and carries Opus.
+
+Three things belong to the Architect alone — the commits, the ticked boxes, and the decision to invoke an
+agent — because they are the only evidence a block was ever gated. Since 0.5.0 that is enforced by the
+boundary hooks rather than asked for in prose, which is what keeps a worker from finishing a block by
+ticking its own tasks and committing its own work.
 
 The roles coordinate through the change's shared `DEVLOG.md` — an attributed thread where the Architect
 briefs, the worker reports and asks questions, and both review loops play out.
