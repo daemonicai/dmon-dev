@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+#!! TEMPLATE: .claude/hooks/dmons-tripwire.sh — the boundary tripwire.
+#!! This template has NO {{PLACEHOLDER}} slots: copy it verbatim, then `chmod +x` the result.
+#!! Comment rule (as in Makefile.template): delete every `#!!` line; KEEP the plain `#`
+#!! comments — they are written for whoever opens the generated script next.
+#!! The provenance stamp goes on the line directly below the shebang: `# dmons-scaffold: <version>`.
+#!! This one is wired in `.claude/settings.json`, NOT in agent frontmatter — it has to run in
+#!! the Architect's session, because it brackets the Architect's Agent calls from outside.
+#
+# dmons boundary tripwire — brackets every agent the Architect spawns.
+#
+#   usage: dmons-tripwire.sh pre|post
+#
+# `pre` (PreToolUse on the Agent tool) records HEAD and the tick count of every active
+# change's tasks.md. `post` (PostToolUse on the same call) recomputes both and tells the
+# Architect, in its own context, if either moved while the agent was running.
+#
+# This is detection, not prevention — dmons-guard.sh does the prevention. The two are not
+# redundant: the guard can only block surfaces it knows about, and this catches the rest by
+# looking at the outcome. It is also the only check that survives a repo where frontmatter
+# hooks are skipped because the workspace was never trusted.
+#
+# Fails OPEN: a tripwire that breaks the Architect's turn would be worse than one that
+# occasionally misses. Anything it cannot compute, it stays quiet about.
+
+set -uo pipefail
+
+MODE="${1:-}"
+
+ROOT="${CLAUDE_PROJECT_DIR:-}"
+INPUT=$(cat 2>/dev/null || printf '')
+command -v jq >/dev/null 2>&1 || exit 0
+
+[ -n "$ROOT" ] || ROOT=$(printf '%s' "$INPUT" | jq -r '.cwd // empty')
+[ -n "$ROOT" ] || ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$ROOT" 2>/dev/null || exit 0
+
+AGENT=$(printf '%s' "$INPUT" | jq -r '.tool_input.subagent_type // empty')
+CALL=$(printf '%s' "$INPUT" | jq -r '.tool_use_id // empty')
+
+# Only the Apply Workflow's own agents are bracketed. An Explore or general-purpose agent the
+# Architect spawns for its own reasons is not bound by these boundaries.
+case "$AGENT" in
+  worker | worker-* | reviewer | supervisor) ;;
+  *) exit 0 ;;
+esac
+[ -n "$CALL" ] || exit 0
+
+STATE_DIR=".claude/.dmons-tripwire"
+SNAPSHOT="$STATE_DIR/$CALL"
+
+# Tick counts per active change, one `<count> <path>` line each. A count is more useful than a
+# checksum: when it moves, the report can name the file and the delta rather than just
+# asserting that something changed.
+tasks_state() {
+  find openspec/changes -maxdepth 2 -name tasks.md 2>/dev/null |
+    grep -v '/archive/' |
+    LC_ALL=C sort |
+    while IFS= read -r f; do
+      printf '%s %s\n' "$(grep -c '^[[:space:]]*- \[x\]' "$f" 2>/dev/null || printf '0')" "$f"
+    done
+}
+
+case "$MODE" in
+  pre)
+    mkdir -p "$STATE_DIR" 2>/dev/null || exit 0
+    {
+      printf 'HEAD %s\n' "$(git rev-parse HEAD 2>/dev/null || printf 'none')"
+      tasks_state
+    } >"$SNAPSHOT" 2>/dev/null
+    exit 0
+    ;;
+
+  post)
+    [ -f "$SNAPSHOT" ] || exit 0
+
+    BEFORE_HEAD=$(awk '/^HEAD /{print $2; exit}' "$SNAPSHOT")
+    BEFORE_TASKS=$(grep -v '^HEAD ' "$SNAPSHOT")
+    rm -f "$SNAPSHOT" 2>/dev/null
+
+    AFTER_HEAD=$(git rev-parse HEAD 2>/dev/null || printf 'none')
+    AFTER_TASKS=$(tasks_state)
+
+    FINDINGS=""
+
+    if [ "$BEFORE_HEAD" != "$AFTER_HEAD" ]; then
+      COMMITS=$(git log --oneline "$BEFORE_HEAD..$AFTER_HEAD" 2>/dev/null | sed 's/^/    /')
+      FINDINGS="${FINDINGS}- HEAD moved while \`${AGENT}\` was running: ${BEFORE_HEAD} -> ${AFTER_HEAD}. Commits that appeared:
+${COMMITS}
+"
+    fi
+
+    if [ "$BEFORE_TASKS" != "$AFTER_TASKS" ]; then
+      DELTA=$(printf '%s\n' "$AFTER_TASKS" | while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        path=${line#* }
+        now=${line%% *}
+        was=$(printf '%s\n' "$BEFORE_TASKS" | awk -v p="$path" '$2 == p {print $1; exit}')
+        [ -n "$was" ] || was=0
+        [ "$was" = "$now" ] || printf '    %s: %s -> %s ticked\n' "$path" "$was" "$now"
+      done)
+      FINDINGS="${FINDINGS}- Ticked boxes changed while \`${AGENT}\` was running:
+${DELTA}
+"
+    fi
+
+    [ -n "$FINDINGS" ] || exit 0
+
+    REASON="BOUNDARY TRIPWIRE — \`${AGENT}\` changed state that only you (the Architect) may change.
+
+${FINDINGS}
+Neither is the agent's to do: you commit once per block, after the reviewer approves and every gate has printed EXIT:0, and you tick the boxes yourself once you have run them. Whatever moved here was not gated by you.
+
+Before you continue:
+1. Read what actually landed (\`git show\`, \`git diff ${BEFORE_HEAD}..HEAD\`) — the work may be fine even though the way it landed was not.
+2. Undo the agent's bookkeeping, not its work: \`git reset --soft ${BEFORE_HEAD}\` puts the changes back in the tree with the history where you left it, and untick any box you did not tick.
+3. Run the block through the rest of the loop as normal — reviewer, gates, your tick, your commit.
+4. Post it to the DEVLOG. A boundary that was crossed silently is the one that gets crossed again."
+
+    jq -n --arg r "$REASON" '{decision: "block", reason: $r}'
+    exit 0
+    ;;
+
+  *) exit 0 ;;
+esac

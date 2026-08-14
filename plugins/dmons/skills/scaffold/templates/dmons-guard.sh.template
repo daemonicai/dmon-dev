@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+#!! TEMPLATE: .claude/hooks/dmons-guard.sh — the PreToolUse boundary guard.
+#!! This template has NO {{PLACEHOLDER}} slots: copy it verbatim, then `chmod +x` the result.
+#!! Comment rule (as in Makefile.template): delete every `#!!` line; KEEP the plain `#`
+#!! comments — they are written for whoever opens the generated script next.
+#!! The provenance stamp goes on the line directly below the shebang: `# dmons-scaffold: <version>`.
+#
+# dmons boundary guard — a PreToolUse hook for the OpenSpec Apply Workflow's agents.
+#
+#   usage: dmons-guard.sh <role>        role = worker | auditor
+#
+# Wired from the `hooks:` frontmatter of .claude/agents/worker*.md (role `worker`) and of
+# reviewer.md / supervisor.md (role `auditor`). Frontmatter hooks fire only for that agent's
+# own tool calls, so this never sees the Architect's — which is the whole point: the
+# Architect must commit and tick boxes, and the agents it spawns must not.
+#
+# Exit 2 blocks the call; the agent reads stderr as the reason it was blocked. The agents'
+# prompts already explain these boundaries. That prose is the explanation; this file is the
+# enforcement, and the two must keep saying the same thing.
+#
+# Fails CLOSED: if it cannot parse the tool call, it blocks it.
+
+set -uo pipefail
+
+ROLE="${1:-worker}"
+
+deny() {
+  printf 'BLOCKED by the OpenSpec Apply Workflow (%s boundary).\n\n%s\n\nThis is not a permission prompt and not a transient failure — retrying it, or reaching the same result by another tool, is itself a breach. Post the reason to the change DEVLOG and hand back to the Architect; that hand-back is the expected outcome here, not a failure.\n' \
+    "$ROLE" "$1" >&2
+  exit 2
+}
+
+command -v jq >/dev/null 2>&1 || deny "jq is not on PATH, so this guard cannot inspect the tool call. It fails closed rather than waving calls through unchecked. Install jq."
+
+INPUT=$(cat)
+TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty')
+
+# ---------------------------------------------------------------------------
+# 1. No agent invokes another agent.
+# ---------------------------------------------------------------------------
+case "$TOOL" in
+  Agent | Task)
+    deny "Only the Analyst/Architect (the main thread) invokes agents. A handoff such as \`-> @reviewer\` is a DEVLOG post and a line in your report, not an agent call. If this block needs someone else's help, that is a signal to stop and report, not to delegate."
+    ;;
+esac
+
+# ---------------------------------------------------------------------------
+# 2. Anything that can run a shell.
+#    Bash is the obvious surface. context-mode's ctx_* tools run commands too, and the
+#    workflow deliberately routes every `make` gate through them — so a guard matching only
+#    Bash would leave the agents' busiest path unguarded.
+# ---------------------------------------------------------------------------
+case "$TOOL" in
+  Bash | PowerShell | *ctx_execute | *ctx_execute_file | *ctx_batch_execute)
+    # Every string anywhere in the tool input. This covers Bash's `.command`, ctx_execute's
+    # `.code`, and ctx_batch_execute's `.commands[].command` without needing to know which
+    # tool put the command where — and it keeps working when a tool's input shape changes.
+    CMD=$(printf '%s' "$INPUT" | jq -r '[.tool_input | .. | strings] | join(" ; ")')
+
+    # Collapse git's global options before matching the subcommand, so `git -C sub push` and
+    # `git -c user.name=x commit` read as `git push` / `git commit`. Without this, any option
+    # that takes a separate value walks straight past the subcommand list below.
+    CMD=$(printf '%s' "$CMD" | sed -E 's/([^[:alnum:]_.-]|^)git([[:space:]]+(-[cC][[:space:]]+[^[:space:]]+|--(git-dir|work-tree|namespace|exec-path)[= ][^[:space:]]+|-[^[:space:]]+))*[[:space:]]+/\1git /g')
+
+    if printf '%s' "$CMD" | grep -Eq '(^|[^[:alnum:]_.-])git[[:space:]]+(commit|add|push|tag|merge|rebase|reset|revert|cherry-pick|stash|am|apply|restore|switch|checkout|clean|rm|mv|worktree|update-ref)([^[:alnum:]_-]|$)'; then
+      deny "The Architect owns the git history — it commits once per block, after the reviewer approves and every gate has printed EXIT:0. Leave the work uncommitted in the tree and report which \`N.M\` tasks you completed. Reading history (\`git diff\`, \`git log\`, \`git status\`, \`git show\`) is fine and is not blocked."
+    fi
+
+    if printf '%s' "$CMD" | grep -Eq '(^|[^[:alnum:]_.-])gh[[:space:]]+(pr|release|repo|api|workflow)([^[:alnum:]_-]|$)'; then
+      deny "Pull requests, releases, and anything else that leaves this machine are the Product Owner's call, routed through the Architect."
+    fi
+
+    if printf '%s' "$CMD" | grep -Eq '\.claude/(hooks|agents|settings)'; then
+      deny "\`.claude/\` holds the workflow's own definitions — the agent files, this guard, and the permission config. No block touches them; a change there is a change to the rules you are working under."
+    fi
+    ;;
+esac
+
+# ---------------------------------------------------------------------------
+# 3. Anything that writes a file.
+# ---------------------------------------------------------------------------
+case "$TOOL" in
+  Edit | Write | MultiEdit | NotebookEdit)
+    FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.notebook_path // empty')
+    BASE=${FILE##*/}
+
+    case "$BASE" in
+      tasks.md)
+        deny "\`tasks.md\` is the Architect's ledger, and a ticked box is a claim that the gates passed. It flips \`[ ]\` to \`[x]\` itself, after it has run them. Report the \`N.M\` numbers you completed and let it tick."
+        ;;
+      Makefile | GNUmakefile | *.mk)
+        deny "The Makefile is the Architect's. If this block needs a gate target that does not exist, or an existing target no longer covers what it names, stop and report that — a gate written by the agent it gates is not a gate."
+        ;;
+    esac
+
+    case "$FILE" in
+      CLAUDE.md | */CLAUDE.md | *.claude/* | */.claude/*)
+        deny "\`CLAUDE.md\` and \`.claude/\` define the workflow you are running inside. Editing them from within a block is out of scope by construction."
+        ;;
+    esac
+
+    if [ "$ROLE" = auditor ] && [ "$BASE" != DEVLOG.md ]; then
+      deny "You report; you do not edit. \`DEVLOG.md\` is the one file you write — findings go there, and a worker applies them under the Architect's direction. Fixing it yourself removes the review the workflow is built on."
+    fi
+    ;;
+esac
+
+exit 0

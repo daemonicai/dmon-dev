@@ -60,6 +60,10 @@ differently, and the drift shows up as agents that no longer agree with each oth
    - From **0.4.0** the scaffold also owns a root **`Makefile`**, stamped as a `#` comment on its first
      line. A scaffolded repo whose `CLAUDE.md` names raw toolchain commands (`dotnet build`) rather
      than `make` targets is pre-0.4.0, whatever else it has.
+   - From **0.5.0** it also owns **`.claude/hooks/dmons-guard.sh`** and
+     **`.claude/hooks/dmons-tripwire.sh`**, each stamped on its second line (the shebang keeps the
+     first). A scaffolded repo whose agent files carry no `hooks:` frontmatter is pre-0.5.0 — which
+     means its agents are enforcing nothing, whatever their Boundaries sections say.
 3. **Target version** = the plugin version in `${CLAUDE_PLUGIN_ROOT}/../.claude-plugin/plugin.json`
    (or `plugin.json` at the plugin root).
 4. **Already current?** If the stamp equals the target, say so and stop — offer `/dmons:scaffold` only
@@ -142,10 +146,15 @@ Follow each migration note exactly. General rules:
   show the user both, and let them decide.
 - **New agent files get the full treatment** — fill every slot, strip every guidance comment, exactly as
   `/dmons:scaffold` Step 5 requires. A half-filled agent is worse than no agent.
-- **Permission rules are merged, never replaced.** When a migration adds gate targets to
-  `.claude/settings.json`, read the file first and append to `permissions.allow` — an already-scaffolded
-  repo has rules there that a wholesale write would silently drop. Ask for this separately from the
-  Makefile; consent to a build file is not consent to edit a permission config.
+- **Permission rules and hook wiring are merged, never replaced.** When a migration adds gate targets to
+  `permissions.allow` or a `hooks` entry to `.claude/settings.json`, read the file first and append — an
+  already-scaffolded repo has rules there that a wholesale write would silently drop. Ask for each
+  separately from the Makefile; consent to a build file is not consent to edit a permission config, and
+  a `hooks` key (which runs commands) is a larger ask again than a permission rule.
+- **The hook scripts are copied, never adapted, and always `chmod +x`.** They carry no audited values,
+  so there is nothing in them to harvest or tailor. A non-executable hook script blocks nothing and
+  reports nothing — the workflow looks completely normal right up until an agent commits — so verify the
+  bit rather than assuming the write set it.
 - **The `Makefile` is the project's file, not the scaffold's.** Never rewrite a recipe the repo already
   has; propose additions (missing targets, the `LABEL_EXIT:` echo, the gate sets) and let the Product
   Owner accept or decline each. Show the complete proposed file before writing it, exactly as
@@ -163,7 +172,9 @@ After the migrations are applied, write the provenance stamp into **every file t
 ```
 
 From 0.4.0 that includes the root `Makefile`, where the stamp is a `#` comment on the **first line**
-(`# dmons-scaffold: <version>`) — but only if the Product Owner accepted it.
+(`# dmons-scaffold: <version>`) — but only if the Product Owner accepted it. From 0.5.0 it also includes
+`.claude/hooks/dmons-guard.sh` and `.claude/hooks/dmons-tripwire.sh`, where the shebang keeps the first
+line and the stamp goes on the **second**.
 
 - **All migrations applied** → stamp the target version.
 - **Some skipped** → stamp the **last fully-applied version**, and tell the user which migrations were

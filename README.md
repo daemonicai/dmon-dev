@@ -43,6 +43,10 @@ generated `CLAUDE.md` casts the main thread as an **Analyst/Architect** working 
 and each finished section gets a whole-section audit from the `supervisor` before the next one opens —
 all coordinated through a shared `DEVLOG.md`.
 
+It also writes two **boundary hooks** into `.claude/hooks/`. The commits, the ticked boxes, and the
+decision to invoke an agent belong to the Architect alone — they are the only evidence a block was
+gated — so the agents are blocked from all three rather than asked to stay off them.
+
 Already scaffolded with an earlier version? Don't re-run `/dmons:scaffold` — it would discard the
 audited content and any hand edits. Run:
 
