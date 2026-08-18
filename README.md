@@ -5,7 +5,7 @@ A Claude Code plugin marketplace for the **dmon** family of repos (`dcli`, `dmon
 
 ## Built for OpenSpec
 
-Everything here is designed to work with **OpenSpec**. The `dmons` plugin is the orchestration layer on
+Everything here is designed to work with [**OpenSpec**](https://openspec.dev/). The `dmons` plugin is the orchestration layer on
 top of it, not a replacement for it: the skills assume a repo with `openspec/` in it, they read the
 repo's specs and changes, and they hand off to the `/opsx:*` commands (`opsx:explore`, `opsx:propose`,
 `opsx:apply`) at each step. OpenSpec itself — the CLI, the `/opsx:*` commands, the `openspec-*` skills —
