@@ -3,11 +3,20 @@
 A Claude Code plugin marketplace for the **dmon** family of repos (`dcli`, `dmon-core`, `dmon-meko`,
 `dmon-websearch`, …).
 
+## Built for OpenSpec
+
+Everything here is designed to work with **OpenSpec**. The `dmons` plugin is the orchestration layer on
+top of it, not a replacement for it: the skills assume a repo with `openspec/` in it, they read the
+repo's specs and changes, and they hand off to the `/opsx:*` commands (`opsx:explore`, `opsx:propose`,
+`opsx:apply`) at each step. OpenSpec itself — the CLI, the `/opsx:*` commands, the `openspec-*` skills —
+comes from `openspec init`, and this marketplace does not install it. Run that first; without it, none of
+the skills below have anything to work with.
+
 ## Plugins
 
 | Plugin | What it does |
 |--------|--------------|
-| [`dmons`](plugins/dmons) | Scaffolds the OpenSpec Apply Workflow into a repo — generates a tailored Analyst/Architect `CLAUDE.md` plus one or more `worker` subagents, a per-block `reviewer`, and a per-section `supervisor`, by auditing the repo's openspec specs and changes. Also ships `/devlog`, which maintains a change's shared `DEVLOG.md`. |
+| [`dmons`](plugins/dmons) | Walks an OpenSpec project from an empty repo to a building one: `/dmons:discovery` gathers requirements as the Analyst, `/dmons:architecture` makes the technology decisions as the Architect, and `/dmons:scaffold` generates a tailored Analyst/Architect `CLAUDE.md` plus one or more `worker` subagents, a per-block `reviewer`, and a per-section `supervisor` by auditing the repo's openspec specs and changes. Also ships `/devlog`, which maintains a change's shared `DEVLOG.md`. |
 
 ## Install
 
@@ -27,7 +36,24 @@ To pick up later updates, refresh the marketplace and start a new session:
 /plugin marketplace update dmon-dev
 ```
 
-Then, in a target repo that already has `openspec/` set up:
+## Where to start
+
+Both entry points assume the target repo has already had `openspec init` run in it.
+
+**A brand-new project** — an empty, OpenSpec-initialized repo with no open or archived changes and no
+real code yet — starts at discovery:
+
+```
+/dmons:discovery      # requirements, as the Analyst — assumes nothing about the how
+/dmons:architecture   # platform, language, frameworks, hosting — as the Architect
+/dmons:scaffold       # the Apply Workflow agents that build it
+```
+
+`/dmons:discovery` draws the *what* and *why* out of you as the Product Owner and hands off to
+`opsx:explore`; `/dmons:architecture` then decides the *how* against those requirements and hands off to
+`opsx:propose`. Scaffold comes last, because it needs at least one change to audit.
+
+**An existing repo** — one that already has changes or code — skips discovery and goes straight to:
 
 ```
 /dmons:scaffold
