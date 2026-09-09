@@ -5,7 +5,7 @@
   "license": "MPL-2.0",
   "owner": {
     "name": "emmz",
-    "email": "emmz.rendle@anna.money"
+    "email": "rendle@gmail.com"
   },
   "plugins": [
     {
@@ -15,7 +15,7 @@
       "source": "./plugins/dmons",
       "author": {
         "name": "emmz",
-        "email": "emmz.rendle@anna.money"
+        "email": "rendle@gmail.com"
       },
       "keywords": ["openspec", "orchestration", "worker", "reviewer", "supervisor", "code-review", "scaffold", "migration", "upgrade", "agents", "devlog", "discovery", "requirements", "greenfield", "architecture", "design-decisions", "adr", "makefile", "gates", "hooks", "boundaries", "guardrails"],
       "category": "development"
