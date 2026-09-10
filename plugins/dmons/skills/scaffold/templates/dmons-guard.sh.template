@@ -40,7 +40,7 @@ TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty')
 # ---------------------------------------------------------------------------
 case "$TOOL" in
   Agent | Task)
-    deny "Only the Analyst/Architect (the main thread) invokes agents. A handoff such as \`-> @reviewer\` is a DEVLOG post and a line in your report, not an agent call. If this block needs someone else's help, that is a signal to stop and report, not to delegate."
+    deny "Only the Analyst/Architect (the main thread) invokes agents. A handoff such as \`-> @reviewer\` is a DEVLOG post and a line in your report, not an agent call. If this work needs someone else's help, that is a signal to stop and report, not to delegate."
     ;;
 esac
 
@@ -63,7 +63,7 @@ case "$TOOL" in
     CMD=$(printf '%s' "$CMD" | sed -E 's/([^[:alnum:]_.-]|^)git([[:space:]]+(-[cC][[:space:]]+[^[:space:]]+|--(git-dir|work-tree|namespace|exec-path)[= ][^[:space:]]+|-[^[:space:]]+))*[[:space:]]+/\1git /g')
 
     if printf '%s' "$CMD" | grep -Eq '(^|[^[:alnum:]_.-])git[[:space:]]+(commit|add|push|tag|merge|rebase|reset|revert|cherry-pick|stash|am|apply|restore|switch|checkout|clean|rm|mv|worktree|update-ref)([^[:alnum:]_-]|$)'; then
-      deny "The Architect owns the git history — it commits once per block, after the reviewer approves and every gate has printed EXIT:0. Leave the work uncommitted in the tree and report which \`N.M\` tasks you completed. Reading history (\`git diff\`, \`git log\`, \`git status\`, \`git show\`) is fine and is not blocked."
+      deny "The Architect owns the git history — it commits once per section, after the reviewer approves and every gate has printed EXIT:0. Leave the work uncommitted in the tree and report which \`N.M\` tasks you completed. Reading history (\`git diff\`, \`git log\`, \`git status\`, \`git show\`) is fine and is not blocked."
     fi
 
     if printf '%s' "$CMD" | grep -Eq '(^|[^[:alnum:]_.-])gh[[:space:]]+(pr|release|repo|api|workflow)([^[:alnum:]_-]|$)'; then
@@ -71,7 +71,7 @@ case "$TOOL" in
     fi
 
     if printf '%s' "$CMD" | grep -Eq '\.claude/(hooks|agents|settings)'; then
-      deny "\`.claude/\` holds the workflow's own definitions — the agent files, this guard, and the permission config. No block touches them; a change there is a change to the rules you are working under."
+      deny "\`.claude/\` holds the workflow's own definitions — the agent files, this guard, and the permission config. No task touches them; a change there is a change to the rules you are working under."
     fi
     ;;
 esac
@@ -89,13 +89,13 @@ case "$TOOL" in
         deny "\`tasks.md\` is the Architect's ledger, and a ticked box is a claim that the gates passed. It flips \`[ ]\` to \`[x]\` itself, after it has run them. Report the \`N.M\` numbers you completed and let it tick."
         ;;
       Makefile | GNUmakefile | *.mk)
-        deny "The Makefile is the Architect's. If this block needs a gate target that does not exist, or an existing target no longer covers what it names, stop and report that — a gate written by the agent it gates is not a gate."
+        deny "The Makefile is the Architect's. If this work needs a gate target that does not exist, or an existing target no longer covers what it names, stop and report that — a gate written by the agent it gates is not a gate."
         ;;
     esac
 
     case "$FILE" in
       CLAUDE.md | */CLAUDE.md | *.claude/* | */.claude/*)
-        deny "\`CLAUDE.md\` and \`.claude/\` define the workflow you are running inside. Editing them from within a block is out of scope by construction."
+        deny "\`CLAUDE.md\` and \`.claude/\` define the workflow you are running inside. Editing them from within the work they govern is out of scope by construction."
         ;;
     esac
 

@@ -1,10 +1,15 @@
 <!--
   TEMPLATE: Analyst/Architect CLAUDE.md (OpenSpec Workflow)
   Fill every {{PLACEHOLDER}} from the repo audit, then DELETE all <!-- ... --> comments.
-  Keep the "# OpenSpec Workflow" section structure intact — it is the load-bearing part. In particular
-  keep the two nested loops of §3 (outer = {{UNIT}}, inner = block) and the {{UNIT}} review that closes
-  the outer loop; that shape is the workflow.
-  Adjust the gate list, worker roster, and commit footer to match the project's real setup.
+  This file is the repo's CONFIGURATION for the workflow, not its procedure. The implementation
+  procedure lives in the `/dmons:implementation` skill, which reads this file at runtime — so the
+  "Workflow configuration" block must stay machine-readable (keys fixed, values filled), and the
+  "Implementation phase" section must keep its instruction to invoke the skill at every section
+  boundary. That instruction is the loop's control flow; it lives here because this file never
+  drops out of context and the skill can.
+  Keep the authority clause exactly as split below: CLAUDE.md for project facts, roles, and
+  boundaries; the skill for the procedure. Collapsing it back to "this document is authoritative"
+  tells the Architect to prefer a stale copy of the loop over the live one.
 -->
 # {{PROJECT_NAME}}
 
@@ -22,18 +27,18 @@ Every active change keeps a **`DEVLOG.md`** next to its `tasks.md`
 Analyst/Architect, the worker(s), the reviewer, and the supervisor all write to as they work, like a
 thread in a chat room. Conventions:
 
-- Organised by `## N.` **{{UNIT}}** (mirroring `tasks.md`), with a pinned `## NEXT` at the bottom.
+- Organised by `## N.` **{{UNIT}}** (mirroring `tasks.md`), then a `## Change review` heading for the
+  supervisor's end-of-change audit, with a pinned `## NEXT` at the bottom.
 - Each post is **attributed** — prefixed with the author's role: `[architect]`, the worker's name
-  (`[worker]`, or `[worker-<stack>]` for a per-stack worker), `[reviewer]`, `[supervisor]` — and
-  references the **block** (`N.1–N.3`) it concerns.
+  (`[worker]`, or `[worker-<stack>]` for a per-stack worker), `[reviewer]`, `[supervisor]`.
 - **The first post under each `## N.` heading is the {{UNIT}}'s base commit** —
-  `**[architect]** Base: <sha> — <what this {{UNIT}} delivers>`. The supervisor's review scope is
-  `git diff <sha>..HEAD`, so this post is load-bearing, not ceremony.
+  `**[architect]** Base: <sha> — <what this {{UNIT}} delivers>`. It is the reviewer's scope for the
+  {{UNIT}}, and the first one is the supervisor's scope for the whole change — not ceremony.
 - **Questions** are addressed in-thread: `❓ @architect — spec says X but design says Y; which?`, and
-  answered by the addressee. Handoffs read `→ @reviewer`. The whole review loop lives here.
+  answered by the addressee. Handoffs read `→ @reviewer`.
 - **Append-only** — posts persist forever; only `## NEXT` is rewritten. The DEVLOG is committed with
-  each block and moves to the archive (`openspec/changes/archive/YYYY-MM-DD-<name>/`) with the change,
-  so a shipped change's DEVLOG is the durable record of *how* it was built, not just *what* it
+  each {{UNIT}} and moves to the archive (`openspec/changes/archive/YYYY-MM-DD-<name>/`) with the
+  change, so a shipped change's DEVLOG is the durable record of *how* it was built, not just *what* it
   specified.
 
 Read it to pick up in-flight context; write to it as you act. The `/devlog` skill maintains it.
@@ -42,8 +47,8 @@ Read it to pick up in-flight context; write to it as you act. The `/devlog` skil
 
 Every gate runs through the root **`Makefile`**. Build, test, format, lint, and spec validation are
 `make` targets; **do not call the underlying toolchain directly**. That keeps the command names stable
-as the toolchain moves underneath them, and — the load-bearing part — **every gate target prints its
-own exit code** as `LABEL_EXIT:<n>` on its last line.
+as the toolchain moves underneath them, and — the part everything else rests on — **every gate target
+prints its own exit code** as `LABEL_EXIT:<n>` on its last line.
 
 **Read the exit line, not the output.** A gate passed only if you saw `BUILD_EXIT:0`. Tools routinely
 exit non-zero while printing output that scans exactly like a clean run, and a gate has been reported
@@ -65,8 +70,8 @@ as passing on that basis before. Quote the code; don't interpret the log.
 `make publish` and `make clean` are **not** gates and no agent runs them — they are the Product
 Owner's.
 
-**The Makefile is yours (Architect), not the workers'.** When a block adds a project, a test suite, or
-a stack that the existing targets don't cover, *you* update the Makefile and say so in the DEVLOG. A
+**The Makefile is yours (Architect), not the workers'.** When a {{UNIT}} adds a project, a test suite,
+or a stack that the existing targets don't cover, *you* update the Makefile and say so in the DEVLOG. A
 worker that needs a target changed stops and reports it; it does not edit the Makefile, and it does not
 route around it by calling the raw toolchain.
 
@@ -74,7 +79,7 @@ route around it by calling the raw toolchain.
 
 Three things belong to you alone: **the commits, the ticked boxes, and the decision to invoke an
 agent.** Those rules are written into every agent's prompt, and they are also enforced, because a rule
-that only exists as prose is one an agent under pressure to finish a block will eventually break.
+that only exists as prose is one an agent under pressure to finish a {{UNIT}} will eventually break.
 
 - **`.claude/hooks/dmons-guard.sh`** — a `PreToolUse` hook wired into each agent's own frontmatter, so
   it sees that agent's tool calls and never yours. It blocks git writes, edits to `tasks.md`, the
@@ -85,12 +90,13 @@ that only exists as prose is one an agent under pressure to finish a block will 
   agent spawns, re-checks both when that agent finishes, and reports any movement to you at the end of
   your turn. Anything the guard didn't catch still surfaces — in your context, instead of in a commit log
   nobody reads. Agents run in the background, so this is deliberately not tied to the moment your `Agent`
-  call returns: that moment is the launch, not the finish.
+  call returns: that moment is the launch, not the finish. The same script also reminds you, after each
+  of your commits, to re-invoke `/dmons:implementation` (see *The implementation phase*).
 
-**When the tripwire fires, it is telling you the block skipped a gate.** Don't accept the state and move
-on: read what landed, then `git reset --soft <the sha it names>` to put the work back in the tree
-without the agent's commit, untick anything you didn't tick, and run the block through the rest of the
-loop — reviewer, gates, your tick, your commit. Record it in the DEVLOG. The work is often fine; the
+**When the tripwire fires, it is telling you the {{UNIT}} skipped a gate.** Don't accept the state and
+move on: read what landed, then `git reset --soft <the sha it names>` to put the work back in the tree
+without the agent's commit, untick anything you didn't tick, and run the {{UNIT}} through the rest of
+the loop — reviewer, gates, your tick, your commit. Record it in the DEVLOG. The work is often fine; the
 problem is that nothing verified it, and that's exactly what the loop exists to do.
 
 Neither hook constrains you. You commit, you tick, you spawn the agents.
@@ -99,18 +105,22 @@ Neither hook constrains you. You commit, you tick, you spawn the agents.
 
 # OpenSpec Workflow
 
-**This section is authoritative.** If a skill's behavior ever conflicts with what's written here,
-**follow this document.**
+**Authority is split by kind.** This document is authoritative for **project facts, roles, and
+boundaries** — who owns what, which commands gate the work, what the agents may not do.
+**`/dmons:implementation`** is authoritative for **the implementation procedure** — the order of steps,
+the handoffs, the gate/tick/commit cadence. Any `opsx:*` skill is subordinate to both: if one's
+behaviour conflicts with either, follow this document or `/dmons:implementation`, whichever covers the
+point.
 
-A change moves through three phases. The `opsx` skills drive the first two; this document spells out
-the third in full:
+A change moves through three phases:
 
-- **Explore** (`opsx:explore`) — **Analyst** hat. Work with the Product Owner to shape *what* to build.
-- **Propose** (`opsx:propose`) — **Architect** hat. Shape *how*: the proposal, `design.md`, and
-  `tasks.md`.
-- **Apply** (`opsx:apply`) — **Architect** hat. Everything below: implement the change **{{UNIT}} by
-  {{UNIT}}, block by block** via the `worker`/`reviewer` split, with a `supervisor` auditing each
-  finished {{UNIT}}.
+- **Explore** (`opsx:explore`, via `/dmons:discovery` on a greenfield repo) — **Analyst** hat. Work
+  with the Product Owner to shape *what* to build.
+- **Propose** (`opsx:propose`, via `/dmons:architecture` while the technology is undecided) —
+  **Architect** hat. Shape *how*: the proposal, `design.md`, and `tasks.md`.
+- **Implementation** (`opsx:apply`, via **`/dmons:implementation`**) — **Architect** hat. Build the
+  change **{{UNIT}} by {{UNIT}}** via the `worker`/`reviewer` split, with a `supervisor` auditing the
+  whole change once every {{UNIT}} has landed.
 
 ## Roles — the Product Owner owns the vision; the main thread never writes feature code
 
@@ -120,191 +130,84 @@ the third in full:
 - **Analyst/Architect** = the main thread (you). One role, two hats — and you should know which you're
   wearing:
   - **Analyst** during `opsx:explore` — shaping *what* with the Product Owner.
-  - **Architect** during `opsx:propose` and the whole apply below — you shape *how*, then orchestrate
-    the build: read specs, carve work into blocks, brief agents, run the gates, tick boxes, and commit.
-    **You do not implement feature code directly.**
+  - **Architect** during `opsx:propose` and the implementation phase — you shape *how*, then
+    orchestrate the build: read specs, brief agents, run the gates, tick boxes, and commit. **You do
+    not implement feature code directly.**
 - {{WORKER_ROLE_LINES}}<!-- The worker roster. Single full-stack worker: "**`worker`** agent —
-  implements each block." Per-stack workers: one bullet each, naming the stack, e.g.
-  "**`worker-frontend`** agent — implements frontend (Vite/TS) blocks.\n- **`worker-dotnet`** agent —
-  implements .NET backend blocks." -->
-- **`reviewer`** agent — audits each block's diff (one reviewer for the whole change, every stack).
-- **`supervisor`** agent — audits each finished `## N.` {{UNIT}} as a whole, once all its blocks have
-  landed (one supervisor for the whole change, every stack).
-
-**The two auditors have different jobs and must not be swapped.** The `reviewer` is **diff-local** and
-runs per block; the `supervisor` is the only agent that ever sees more than one block at a time, and
-looks for what block reviews structurally cannot catch — cross-block drift, duplicated abstractions,
-dead scaffolding, and whether the {{UNIT}} genuinely satisfies its spec rather than merely ticking its
-tasks. Neither ever edits code: both report, and a worker fixes.
+  implements each {{UNIT}}." Per-stack workers: one bullet each, naming the stack, e.g.
+  "**`worker-frontend`** agent — implements frontend (Vite/TS) work.\n- **`worker-dotnet`** agent —
+  implements .NET backend work." -->
+- **`reviewer`** agent — audits each {{UNIT}}'s diff (one reviewer for the whole change, every stack).
+- **`supervisor`** agent — audits the whole change once every {{UNIT}} has landed (one supervisor, every
+  stack).
 
 **You are the only agent that invokes agents.** The `worker`s, the `reviewer`, and the `supervisor`
 never spawn each other or any other subagent — they report back to you and you route the next step.
-Every handoff in the DEVLOG (`→ @reviewer`, `❓ @architect`) is a *post*, not an invocation: the
-reviewer runs when **you** spawn it, the supervisor runs when **you** spawn it at {{UNIT}} end. This
-keeps one thread holding the whole picture — if an agent could call the next one, the workflow's loops
-would run without you and the gates, ticks, and commits you own would be skipped. The agents have no
-Agent tool at all, so this is a fact about them rather than an instruction to them.
+Every handoff in the DEVLOG (`→ @reviewer`, `❓ @architect`) is a *post*, not an invocation. This keeps
+one thread holding the whole picture — if an agent could call the next one, the loop would run without
+you and the gates, ticks, and commits you own would be skipped. The agents have no Agent tool at all, so
+this is a fact about them rather than an instruction to them.
 
 All agents are defined for this repo. Delegate; don't shortcut by writing the implementation yourself.
 
-## 1. Select the change
+## The implementation phase — invoke `/dmons:implementation` at every {{UNIT}} boundary
 
-1. List active changes = directories in `openspec/changes/` **excluding `archive/`**.
-2. **Always ask the Product Owner which change to apply**, even when there is exactly one. If there are
-   none, say so and stop.
-3. Resume point = the **first unticked `- [ ]` task** in that change's `tasks.md`.
-4. **Check the preceding {{UNIT}} closed.** Ticked boxes are not proof a {{UNIT}} passed its supervisor
-   review — a session can end after the last block commits and before the review runs. Before starting
-   the resume point's {{UNIT}}, read the DEVLOG: if the previous `## N.` has no `[supervisor]` `Approve`
-   under it, run that review first (§3c). If it never got a `Base:` post either, reconstruct the range
-   from `git log` and say so in the DEVLOG.
+The implementation phase runs **{{UNIT}} by {{UNIT}}**, and its procedure lives in the
+**`/dmons:implementation`** skill (from the `dmons` plugin), not in this file. The plugin is required
+to run the phase.
 
-## 2. Pre-flight (Architect, before the first block)
+- **Invoke `/dmons:implementation` at the start of the phase, at the start of every `## N.` {{UNIT}},
+  and before the final change review.** Do not open a {{UNIT}} without it. The skill is re-invoked
+  rather than remembered: a long run or a compaction will drop its procedure out of your context, and
+  this instruction is what survives.
+- After each of your commits, the tripwire hook reminds you of the same thing. Treat that reminder as
+  the cue, not as noise.
 
-1. Read `proposal.md`, `design.md`, and the relevant `specs/<capability>/spec.md` for the {{UNIT}}(s)
-   you're about to work.
-2. **Working tree must be clean** (`git status`). If it's dirty, stop and ask.
-3. **Change must validate**: `openspec validate <change-name> --strict`. If it doesn't, stop and ask.
-4. **Be on the change branch** `change/<change-name>`. Create it from the default branch if missing:
-   `git switch -c change/<change-name>`.
+## Stop and ask — the Product Owner's calls
 
-## 3. Implement — {{UNIT}} by {{UNIT}}, block by block
-
-Walk the change's `## N.` {{UNIT}}s in order from the resume point. There are **two nested loops**:
-
-```
-OUTER — for each ## N. {{UNIT}}, in order
-  ├─ post the {{UNIT}}'s base commit to the DEVLOG
-  ├─ INNER — for each block in the {{UNIT}}
-  │    brief worker → worker implements → reviewer audits → loop until Approve
-  │    → gates pass → tick boxes → commit
-  └─ {{UNIT}} REVIEW — supervisor audits the whole {{UNIT}}
-       Approve → next {{UNIT}}
-       Request changes → carve a remediation block, re-enter INNER
-```
-
-**The unit of work is not the whole {{UNIT}} — it is a *block*:** a coherent run of tasks within one
-{{UNIT}} (e.g. `N.1–N.3`) that makes sense to build and review as one deliverable and land as one
-commit. You (Architect) carve each {{UNIT}} into blocks; a {{UNIT}} is one or more blocks, and **a block
-never spans {{UNIT}}s** — if a block wants to, the {{UNIT}} breakdown is wrong.
-{{BLOCK_STACK_RULE}}<!-- Per-stack workers only: "- Each block belongs to a single stack and routes to
-that stack's worker (`worker-<stack>`); a run of work that crosses stacks is two adjacent blocks, one
-per worker. A cross-stack block is a smell." Delete this line for a single full-stack worker. -->
-
-### 3a. Opening a {{UNIT}} (outer loop)
-
-Before briefing the first block of a `## N.` {{UNIT}}, post its **base commit** to the DEVLOG as the
-first entry under that heading:
-
-```
-**[architect]** Base: <sha> — <one line: what this {{UNIT}} delivers>
-```
-
-`<sha>` is the current `HEAD` (`git rev-parse --short HEAD`). This is what gives the supervisor its
-review scope at the end of the {{UNIT}} (`git diff <sha>..HEAD`); without it, it has no reliable way to
-see the {{UNIT}} as a whole. Post it **before** any block of the {{UNIT}} is committed.
-
-### 3b. Each block (inner loop)
-
-1. **Brief the worker.** Post the brief to the DEVLOG (`[architect]`, under the block's `## N.`
-   {{UNIT}}): the block's tasks (`N.1`…`N.k`), the relevant spec excerpts, the {{DECISIONS_NOUN}} that
-   bind them, and the done-gates below. The worker shouldn't need to go hunting.
-2. **Worker implements the block** and reports back, posting to the DEVLOG as it goes. If the boundary
-   tripwire reports at the end of your turn, deal with that **before** step 3 — an unreviewed, ungated
-   commit is not a starting point for a review.
-3. **Audit.** Spawn `reviewer` on the block diff (correctness, {{COMPLIANCE_NOUN}} compliance, OpenSpec
-   scope, {{LANG}} idiom, {{DOMAIN_QUALITY}}). The reviewer posts its verdict to the DEVLOG.
-4. **Review loop.** Worker and reviewer resolve findings **in the DEVLOG thread** — reviewer posts
-   findings, worker fixes and responds, reviewer re-audits. **Repeat until the reviewer signs off.**
-5. **Gates — all must pass before ticking any box.** Run each and **read its exit line**; a gate
-   passed only when you saw its `LABEL_EXIT:0`:
-   - `{{BUILD_CMD}}` → `BUILD_EXIT:0` (no errors)
-   - `{{TEST_CMD}}` → `TEST_EXIT:0` — the block's new tests **and** all existing tests
-{{FORMAT_GATE_LINE}}<!-- e.g. "   - `make format` → `FORMAT_EXIT:0`" — delete if no format gate -->
-{{LINT_GATE_LINE}}<!-- e.g. "   - `make lint` → `LINT_EXIT:0`" — delete unless the project has a linter distinct from its formatter -->
-   - `{{VALIDATE_CMD}}` → `VALIDATE_EXIT:0`
-
-   `{{GATES_CMD}}` runs the whole set in one `-k` pass and is the quickest way to get the full
-   picture — but a green `GATES_EXIT:0` is what you're after, and a red one still needs the
-   individual exit lines to say which gate failed. Never conclude a gate passed from reading its
-   output; quote the code.
-   A block commits green. If a block must land with a failing test for a sound technical reason (e.g. a
-   red test a later block in the same {{UNIT}} turns green), that is a deliberate Architect call — state
-   the reason in the DEVLOG **and** the commit body. Otherwise a failed gate sends you back to step 4,
-   not to a commit.
-6. **Tick the boxes.** Mark every `- [x] N.M` in the block in `tasks.md`.
-7. **Commit — one conventional commit per block:**
-   ```
-   feat(<change-name>): <block summary> (N.1–N.3)
-
-   - N.1 <task summary>
-   - N.2 <task summary>
-   ...
-
-   {{COAUTHOR_LINE}}
-   ```
-   Commit the DEVLOG with the block.
-
-### 3c. Closing a {{UNIT}} — the supervisor review
-
-When the **last block of a `## N.` {{UNIT}}** has landed (reviewer approved, gates green, boxes ticked,
-committed), the {{UNIT}} is not done yet. Run the {{UNIT}} review before opening the next one.
-
-1. **Spawn `supervisor`** on the {{UNIT}}'s full range — `git diff <base-sha>..HEAD`, where `<base-sha>`
-   is the one you posted in 3a. Point it at the {{UNIT}}'s spec requirements, not just its tasks. It
-   posts its verdict to the DEVLOG under the {{UNIT}}'s heading as `[supervisor]`.
-   - Run it for **every** {{UNIT}}, including a single-block one — the lens is different from the
-     reviewer's, not merely wider.
-2. **`Approve`** → the {{UNIT}} is closed. Roll any architectural notes into `## NEXT` and move to the
-   next {{UNIT}}.
-3. **`Request changes`** → carve a **remediation block** from the findings and re-enter the inner loop
-   (3b) with it: brief a worker, `reviewer` audits it, gates, commit.
-   - The remediation block gets **no new `N.M` numbers** and ticks nothing — every box in the {{UNIT}}
-     is already ticked. The findings and the fix live in the DEVLOG; that is the record.
-   - Commit it as a fix, not a feature:
-     ```
-     fix(<change-name>): address supervisor findings ({{UNIT}} N)
-
-     - <finding> — <what changed>
-     ...
-
-     {{COAUTHOR_LINE}}
-     ```
-   - Then **re-run the supervisor** on the same `<base-sha>..HEAD` range (now including the fix).
-4. **Two rounds, then stop.** If the supervisor still requests changes after one remediation block,
-   **do not carve a third** — stop and put it to the Product Owner (§4). A {{UNIT}} that won't converge
-   in two rounds usually means the {{UNIT}} breakdown or the spec is wrong, and more fixing won't
-   resolve either.
-
-**Do not open the next {{UNIT}} until the current one has a supervisor `Approve`** (or the Product
-Owner has explicitly waved it on). The whole point of the outer loop is that drift is caught before it
-is built on.
-
-## 4. Stop and ask — do not push on
-
-These are the **Product Owner's** calls, not yours. Stop **immediately** and ask (do not improvise a
-fix) when:
+These are the **Product Owner's** calls, not yours, in every phase. Stop, **notify**, and ask — do not
+improvise a fix — when:
 
 - a spec/design is **ambiguous**, or two specs **contradict** each other;
-- doing the task properly needs changes **outside this change's scope** (its proposal/specs);
+- doing the work properly needs changes **outside this change's scope** (its proposal/specs);
 - a task is **blocked by an unresolved Open Question** in `design.md`;
-- implementation or tests reveal the **spec itself is wrong** (not just the code);
-- a task **requires human-in-the-loop verification** that can't be settled by automated gates — e.g.
-  {{HITL_EXAMPLES}}. Implement and self-test as far as possible, then hand the Product Owner a precise,
-  copy-pasteable way to verify (exact command, what to do, what they should see) and **wait for their
-  confirmation before ticking that task**;
-- the **supervisor still requests changes after one remediation block** (§3c.4) — report its findings
-  and ask whether to remediate again, re-cut the {{UNIT}}, or fix the spec.
+- implementation or tests reveal the **spec itself is wrong** (not just the code).
 
-**On stopping mid-block:** leave the WIP **uncommitted**, do **not** tick the block, do **not** revert.
-Log the stop in the DEVLOG and report the **exact task (`N.M`)** that stopped you and why. The WIP stays
-in the working tree for the Product Owner to inspect.
+The Product Owner may not be watching the transcript. A stop that only halts is a stop nobody sees:
+send a notification as well as asking. `/dmons:implementation` adds the phase-specific triggers and says
+how to leave the work while you wait.
 
-## 5. Done
+## Workflow configuration
 
-When every task in the change is ticked and the **final {{UNIT}} has a supervisor `Approve`**:
+`/dmons:implementation` reads this block at every invocation. Edit the values; keep the keys.
+<!-- Fill every value. The skill parses this block, so: keep it valid YAML, keep the `# dmons-config`
+     first line (it is what the skill greps for), and never rename a key. -->
 
-1. Report status to the Product Owner: {{UNIT}}s closed, blocks landed, commits made, test summary, and
-   any architectural notes the supervisor parked in `## NEXT`.
-2. **Propose archiving** — offer to run `/opsx:archive` and **wait for the Product Owner's
-   confirmation**. Do not archive automatically.
+```yaml
+# dmons-config
+unit: {{UNIT}}
+workers:
+{{WORKER_CONFIG_LINES}}
+reviewer: reviewer
+supervisor: supervisor
+gates:
+  build: {{BUILD_CMD}}
+  test: {{TEST_CMD}}
+{{FORMAT_CONFIG_LINE}}
+{{LINT_CONFIG_LINE}}
+  validate: {{VALIDATE_CMD}}
+  all: {{GATES_CMD}}
+{{EVERY_STACK_CONFIG_LINE}}
+decisions_noun: {{DECISIONS_NOUN}}
+hitl_examples: >-
+  {{HITL_EXAMPLES}}
+coauthor: "{{COAUTHOR_LINE}}"
+```
+<!-- {{WORKER_CONFIG_LINES}}: one entry per worker, indented two spaces. Single full-stack worker:
+       "  - name: worker\n    stack: all\n    gates: make gates"
+     Per-stack workers: one entry each, with that stack's gate set, e.g.
+       "  - name: worker-dotnet\n    stack: dotnet\n    gates: make gates\n  - name: worker-web\n    stack: web\n    gates: make gates-web"
+     {{FORMAT_CONFIG_LINE}} / {{LINT_CONFIG_LINE}}: "  format: make format" / "  lint: make lint" —
+       delete the line when the project has no such gate.
+     {{EVERY_STACK_CONFIG_LINE}}: multi-stack only, "  every_stack: make gates-all"; delete otherwise.
+     If the Product Owner skipped the Makefile, the gate values are the raw commands instead. -->

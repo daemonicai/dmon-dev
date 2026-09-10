@@ -42,7 +42,7 @@ differently, and the drift shows up as agents that no longer agree with each oth
 
    **Match the heading at any level** — `grep -nE '^#{1,4} +OpenSpec Workflow'`. The template writes it
    as `#`, but a generated `CLAUDE.md` nests it under the project's own H1, so in a real repo it is
-   usually `##`, with `## 1. Select the change` … `## 5. Done` demoted to `###` to match. **Never grep
+   usually `##`, with its own sub-headings demoted to `###` to match. **Never grep
    for a literal `# OpenSpec Workflow`** — it misses ordinary scaffolded repos, and a false "not
    scaffolded" sends the user to `/dmons:scaffold`, which regenerates over their audited content. When
    in doubt, ask; do not conclude "not scaffolded" from one failed grep.
@@ -68,6 +68,14 @@ differently, and the drift shows up as agents that no longer agree with each oth
      `.claude/settings.json` still calls `dmons-tripwire.sh` from `PreToolUse`/`PostToolUse` is on the
      0.5.0 wiring, and its tripwire has never fired — treat that as pre-0.5.1 even if the stamp says
      otherwise, and tell the user their detection has been inert, not clean.
+   - From **0.6.0** the implementation procedure lives in the `/dmons:implementation` skill, and
+     `CLAUDE.md` carries a fenced **`# dmons-config`** block in its place. A scaffolded repo whose
+     `CLAUDE.md` still spells out the loop in-file (`3. Implement`, blocks, a `3c.` supervisor section)
+     is pre-0.6.0, whatever else it has.
+   - **Previews are not a migration source.** `0.6.0-preview1` → `0.6.0-preview2` has no migration file
+     between them, so this skill would apply nothing and re-stamp — the preview's changes would never
+     land. If source and target are two prereleases of the same release, stop and tell the user to
+     re-scaffold from a pre-scaffold state instead.
 3. **Target version** = the plugin version in `${CLAUDE_PLUGIN_ROOT}/../.claude-plugin/plugin.json`
    (or `plugin.json` at the plugin root).
 4. **Already current?** If the stamp equals the target, say so and stop — offer `/dmons:scaffold` only
@@ -78,6 +86,11 @@ differently, and the drift shows up as agents that no longer agree with each oth
 Migrations live at `${CLAUDE_PLUGIN_ROOT}/skills/update-scaffold/migrations/<version>.md`, one file per
 release that changed the generated output. Read **every** file between the source version (exclusive)
 and the target (inclusive), in version order, and concatenate their migration lists.
+
+**A prerelease target includes its release's note.** By semver `0.6.0-preview2` sorts *before* `0.6.0`,
+so a strict reading would skip `0.6.0.md` when migrating `0.5.1` → `0.6.0-preview2`. Don't: a preview
+of X is X's migration under test, so a target of `X-<anything>` includes `migrations/X.md`. Stamp the
+preview version you actually migrated to.
 
 Each note names its migrations, says which files they touch, gives the exact target content, and states
 what to harvest versus what to audit fresh. **The notes are authoritative** — do not infer migrations by
@@ -91,15 +104,16 @@ need. Typical harvest (the migration notes name what each one needs):
 
 | Value | Harvest from |
 |-------|--------------|
-| The `{{UNIT}}` term actually in use (*section* / *group*) | `CLAUDE.md` §3 headings and `tasks.md` |
+| The `{{UNIT}}` term actually in use (*section* / *group*) | the `# dmons-config` block's `unit:` from 0.6.0; before that, `CLAUDE.md` §3 headings — and `tasks.md` either way |
 | Project name, description, tagline | `CLAUDE.md` header |
-| Build / test / format / lint commands and the gate list | `CLAUDE.md` "Commands" and the gates in §3 — **raw toolchain commands** in a pre-0.4.0 repo, `make` targets after |
+| Build / test / format / lint commands and the gate list | `CLAUDE.md` "Commands" (and the `# dmons-config` `gates:` from 0.6.0, or the gates in §3 before it) — **raw toolchain commands** in a pre-0.4.0 repo, `make` targets after |
+| Human-in-the-loop examples | the `# dmons-config` `hitl_examples:` from 0.6.0; before that, `CLAUDE.md` §4 and `worker*.md` |
 | Existing `Makefile` targets and recipes | `./Makefile`, if there is one — its recipes are the project's own and outrank anything you would infer |
 | Binding decisions, and the nouns used for them | `reviewer.md` / `worker*.md` decisions section |
 | Domain hazards, style bullets, language idioms | `reviewer.md`, `worker*.md` |
 | Worker roster — single or per-stack, and the names | `.claude/agents/worker*.md` |
 | Engineer / principal titles | the agents' opening lines |
-| Commit convention and co-author line | `CLAUDE.md` §3 commit block, and `git log` |
+| Commit convention and co-author line | the `# dmons-config` `coauthor:` from 0.6.0; before that, `CLAUDE.md` §3 commit block — and `git log` |
 
 **Note the repo's `{{UNIT}}` term explicitly.** If it is anything other than *section*, every piece of
 new text you write must use that term — otherwise the updated files will disagree with the ones you
@@ -119,7 +133,7 @@ Show the user, before applying anything:
 Then apply them **one at a time**, using AskUserQuestion (or a clear inline confirm) per migration:
 **apply / skip / show me the exact edit first**.
 
-- **Additive migrations** (new agent file, new `## 3c` section) are low-risk — still confirm, but batch
+- **Additive migrations** (new agent file, a new `CLAUDE.md` section) are low-risk — still confirm, but batch
   the trivial ones if the user says to go ahead.
 - **In-place edits** to a section the user has hand-tuned: show the current text and the proposed text
   side by side before touching it.
@@ -131,8 +145,7 @@ Then apply them **one at a time**, using AskUserQuestion (or a clear inline conf
 Follow each migration note exactly. General rules:
 
 - **Heading levels are relative, never absolute.** Migration notes describe structure in template terms
-  (`## 3.`, `### 3a.`), but a real `CLAUDE.md` is usually demoted one level — `### 3.` with sub-parts at
-  `#### 3a.`. Read the level of the section you're editing and write new headings **relative to it**.
+  (`## Roles`, `## 3.`), but a real `CLAUDE.md` is usually demoted one level — `### Roles`, `### 3.`. Read the level of the section you're editing and write new headings **relative to it**.
   Importing the template's absolute levels breaks the document outline.
 - **Other tools may own regions of `CLAUDE.md`.** Marker-delimited blocks (e.g.
   `<!-- CODEGRAPH_START -->` … `<!-- CODEGRAPH_END -->`) belong to another generator. Never edit inside

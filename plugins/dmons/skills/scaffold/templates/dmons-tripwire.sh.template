@@ -6,23 +6,32 @@
 #!! The provenance stamp goes on the line directly below the shebang: `# dmons-scaffold: <version>`.
 #!! Wired in `.claude/settings.json`, NOT in agent frontmatter — `report` has to run in the
 #!! Architect's session, because that is the only session it is allowed to speak into.
-#!! THREE events, three modes. Do not collapse them back onto a PreToolUse/PostToolUse pair on
+#!! FOUR events, four modes. Do not collapse start/stop back onto a PreToolUse/PostToolUse pair on
 #!! `Agent|Task`: the Agent tool returns at launch, so that pair measures an empty two-second
 #!! window and reports "all clear" unconditionally. That was the 0.5.0 bug; see migrations/0.5.1.md.
+#!! `boundary` (0.6.0) is the only mode that does not detect anything — it is a reminder, and it
+#!! must stay one line. Injecting the implementation procedure here would move it back into the
+#!! repo and undo the CLAUDE.md split; see migrations/0.6.0.md.
 #
 # dmons boundary tripwire — brackets every agent the Architect spawns.
 #
-#   usage: dmons-tripwire.sh start|stop|report
+#   usage: dmons-tripwire.sh start|stop|report|boundary
 #
-# Three hooks, because measuring and reporting happen in different sessions:
+# Four hooks, because measuring and reporting happen in different sessions:
 #
-#   start   SubagentStart — records HEAD and each active change's tick count as an agent spawns.
-#   stop    SubagentStop  — recomputes both when that agent finishes and, if either moved, writes
-#                           a report to disk. It deliberately says nothing: a SubagentStop hook
-#                           talks to the subagent, not to you, and the subagent is not the one who
-#                           needs to hear it.
-#   report  Stop          — runs at the end of your (the Architect's) turn and hands you whatever
-#                           reports `stop` left behind.
+#   start     SubagentStart — records HEAD and each active change's tick count as an agent spawns.
+#   stop      SubagentStop  — recomputes both when that agent finishes and, if either moved, writes
+#                             a report to disk. It deliberately says nothing: a SubagentStop hook
+#                             talks to the subagent, not to you, and the subagent is not the one who
+#                             needs to hear it.
+#   report    Stop          — runs at the end of your (the Architect's) turn and hands you whatever
+#                             reports `stop` left behind.
+#   boundary  PostToolUse   — (Bash) runs after each of *your* commits. A section lands as one
+#                             commit, so a commit is a section boundary, and this reminds you to
+#                             re-invoke `/dmons:implementation` before opening the next one. The
+#                             procedure lives in that skill and can drop out of context over a long
+#                             run or a compaction; this file is always wired, so the reminder
+#                             survives what the procedure does not.
 #
 # The pair is correlated by `agent_id`, which SubagentStart and SubagentStop both carry, so
 # concurrent agents don't collide.
@@ -136,11 +145,11 @@ ${DELTA}
     {
       printf 'BOUNDARY TRIPWIRE — `%s` changed state that only you (the Architect) may change.\n\n' "$AGENT"
       printf '%s\n' "$FINDINGS"
-      printf 'Neither is the agent'"'"'s to do: you commit once per block, after the reviewer approves and every gate has printed EXIT:0, and you tick the boxes yourself once you have run them. Whatever moved here was not gated by you.\n\n'
+      printf 'Neither is the agent'"'"'s to do: you commit once per section, after the reviewer approves and every gate has printed EXIT:0, and you tick the boxes yourself once you have run them. Whatever moved here was not gated by you.\n\n'
       printf 'Before you continue:\n'
       printf '1. Read what actually landed (`git show`, `git diff %s..HEAD`) — the work may be fine even though the way it landed was not.\n' "$BEFORE_HEAD"
       printf '2. Undo the agent'"'"'s bookkeeping, not its work: `git reset --soft %s` puts the changes back in the tree with the history where you left it, and untick any box you did not tick.\n' "$BEFORE_HEAD"
-      printf '3. Run the block through the rest of the loop as normal — reviewer, gates, your tick, your commit.\n'
+      printf '3. Run the section through the rest of the loop as normal — reviewer, gates, your tick, your commit.\n'
       printf '4. Post it to the DEVLOG. A boundary that was crossed silently is the one that gets crossed again.\n'
     } >"$PENDING_DIR/$ID" 2>/dev/null
     exit 0
@@ -175,6 +184,33 @@ ${DELTA}
     done
 
     jq -n --arg r "$REASON" '{decision: "block", reason: $r}'
+    exit 0
+    ;;
+
+  boundary)
+    # settings.json hooks also fire inside subagents, whose payloads carry an agent_id. The
+    # agents cannot commit (the guard sees to that), and the reminder is not theirs to act on.
+    [ -z "$(printf '%s' "$INPUT" | jq -r '.agent_id // empty')" ] || exit 0
+
+    CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty')
+    [ -n "$CMD" ] || exit 0
+
+    # The same global-option collapse dmons-guard.sh uses, so `git -C . commit` still reads as
+    # a commit.
+    CMD=$(printf '%s' "$CMD" | sed -E 's/([^[:alnum:]_.-]|^)git([[:space:]]+(-[cC][[:space:]]+[^[:space:]]+|--(git-dir|work-tree|namespace|exec-path)[= ][^[:space:]]+|-[^[:space:]]+))*[[:space:]]+/\1git /g')
+    printf '%s' "$CMD" | grep -Eq '(^|[^[:alnum:]_.-])git[[:space:]]+commit([^[:alnum:]_-]|$)' || exit 0
+
+    # A commit that failed (nothing staged, a hook rejected it) is not a boundary. HEAD's
+    # commit time is the cheapest evidence one actually landed.
+    COMMITTED=$(git log -1 --format=%ct 2>/dev/null) || exit 0
+    [ $(($(date +%s) - COMMITTED)) -le 120 ] || exit 0
+
+    # Only while a change is in flight — a commit outside the implementation phase has no loop
+    # to rejoin.
+    [ -n "$(tasks_state)" ] || exit 0
+
+    jq -n --arg c 'dmons: that commit is a section boundary. Before opening the next section — or, if every section has now landed, before the final change review — re-invoke `/dmons:implementation`. The procedure lives in that skill, not in CLAUDE.md, and may have dropped out of your context. If this commit was not a section landing (a fix commit mid-remediation, a doc tweak), carry on.' \
+      '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $c}}'
     exit 0
     ;;
 

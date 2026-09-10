@@ -14,7 +14,8 @@ picked by habit.
 It wraps the **`opsx:propose`** step. `opsx:propose` shapes a change — the proposal, `design.md`, and
 `tasks.md`. This skill sets the Architect frame and drives the decisions that give that change its
 technical shape, then hands off to `opsx:propose` to record the change. Sequence:
-`discovery` → `opsx:explore` (the *what*) → **`architecture`** → `opsx:propose` (the *how*) → `scaffold`.
+`discovery` → `opsx:explore` (the *what*) → **`architecture`** → `opsx:propose` (the *how*) → `scaffold`
+→ `implementation`.
 
 ## Preconditions
 
@@ -125,7 +126,7 @@ Once `opsx:propose` has produced the change, tell the Product Owner the path for
 
 > Technology decided and the change proposed. Next: **`/dmons:scaffold`** to generate the `Makefile`
 > command surface and the `worker`/`reviewer`/`supervisor` Apply Workflow agents (they'll enforce these
-> decisions and ADRs), then **`/opsx:apply`** to build it block by block.
+> decisions and ADRs), then **`/dmons:implementation`** to build it section by section.
 
 ## Guardrails
 

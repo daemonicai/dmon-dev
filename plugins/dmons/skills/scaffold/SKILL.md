@@ -1,6 +1,6 @@
 ---
 name: scaffold
-description: Scaffold the OpenSpec Apply Workflow into the current repo — generate a tailored Analyst/Architect CLAUDE.md plus one or more `worker` subagents, a `reviewer` subagent, and a `supervisor` subagent by auditing the repo's openspec specs and changes. Use when the user wants to "set up the openspec agents", "add the worker/reviewer/supervisor agents", "scaffold the OpenSpec workflow", "bootstrap CLAUDE.md for openspec", or onboard a new repo to the block-by-block apply workflow.
+description: Scaffold the OpenSpec Apply Workflow into the current repo — generate a tailored Analyst/Architect CLAUDE.md plus one or more `worker` subagents, a `reviewer` subagent, and a `supervisor` subagent by auditing the repo's openspec specs and changes. Use when the user wants to "set up the openspec agents", "add the worker/reviewer/supervisor agents", "scaffold the OpenSpec workflow", "bootstrap CLAUDE.md for openspec", or onboard a new repo to the section-by-section implementation workflow.
 ---
 
 # Scaffold the OpenSpec Apply Workflow
@@ -15,34 +15,38 @@ changes:
   cites these target names and nothing else. This is the one generated file you must show the Product
   Owner in full before writing (Step 6) — after which its gate targets are separately offered as an
   allowlist in the repo's committed `.claude/settings.json`, so the workflow's gates stop prompting.
-- `CLAUDE.md` — the **Analyst/Architect** instructions: a project header plus the authoritative OpenSpec
-  Workflow. The main thread is cast as the **Analyst/Architect** (Analyst hat during `opsx:explore`,
-  Architect hat during `opsx:propose` and apply) working for the user, who is the **Product Owner**.
-  Apply proceeds through **two nested loops** — the outer over `## N.` sections, the inner **block by
-  block** (a block = a coherent run of tasks within one section), with a section-wide audit closing
-  each outer iteration.
-- `.claude/agents/worker.md` — the implementer subagent (**sonnet**). **One** worker for a single-stack
-  (or full-stack) project, or **one worker per tech stack** (`worker-<stack>.md`) if the Product Owner
-  chooses per-stack workers (Step 4).
-- `.claude/agents/reviewer.md` — the per-block auditor subagent (**sonnet**). Always exactly **one**
-  reviewer, even with per-stack workers. Diff-local: it reviews one block at a time.
-- `.claude/agents/supervisor.md` — the per-section auditor subagent (**opus**). Always exactly **one**,
-  even with per-stack workers. Runs once all a section's blocks have landed and is the only agent that
-  ever sees more than one block: cross-block drift, duplicated abstractions, dead scaffolding, and
-  whether the section genuinely satisfies its spec rather than merely ticking its tasks.
+- `CLAUDE.md` — the repo's **configuration** for the workflow: a project header, the DEVLOG's
+  definition, the Makefile command surface, the enforced boundaries, the Roles, the stop-and-ask
+  principle, and a machine-readable **`# dmons-config`** block. The main thread is cast as the
+  **Analyst/Architect** (Analyst hat during `opsx:explore`, Architect hat during `opsx:propose` and the
+  implementation phase) working for the user, who is the **Product Owner**. It holds the loop's
+  **control flow** — invoke `/dmons:implementation` at every section boundary — but **not its
+  procedure**, which lives in the `/dmons:implementation` skill and reads this file at runtime.
+- `.claude/agents/worker.md` — the implementer subagent (**sonnet**). It implements one whole `## N.`
+  section per brief. **One** worker for a single-stack (or full-stack) project, or **one worker per
+  tech stack** (`worker-<stack>.md`) if the Product Owner chooses per-stack workers (Step 4).
+- `.claude/agents/reviewer.md` — the per-section auditor subagent (**opus**). Always exactly **one**
+  reviewer, even with per-stack workers. Section-local: it audits one section's diff before it lands,
+  and it is the only audit a section gets.
+- `.claude/agents/supervisor.md` — the change-level auditor subagent (**opus**). Always exactly **one**,
+  even with per-stack workers. Runs once, after every section has landed, and is the only agent that
+  ever sees more than one section: drift between sections, duplicated abstractions, dead scaffolding,
+  and whether the change genuinely satisfies its spec rather than merely ticking its tasks.
 - `.claude/hooks/dmons-guard.sh` + `.claude/hooks/dmons-tripwire.sh` — the **boundary hooks**. Copied
   verbatim (they hold no audited values), they turn the agents' Boundaries sections from prose into
   something the harness enforces: the guard blocks the calls, the tripwire catches what the guard
-  couldn't see. Step 6 wires them.
+  couldn't see — and, after each of the Architect's commits, reminds it to re-invoke
+  `/dmons:implementation`. Step 6 wires them.
 
-**The model split is deliberate.** The worker and reviewer run on every block, so they are the hot path
-and stay on sonnet; the supervisor runs once per section and carries opus. Preserve this when
-generating — a supervisor on a weaker model removes the workflow's only cross-block check.
+**The model split is deliberate.** The worker runs once per section and stays on sonnet. The reviewer
+is the only audit each section gets, on a whole section's diff, so it carries opus; the supervisor runs
+once per change and carries opus too. Preserve this when generating — an auditor on a weaker model is
+the workflow's only check at its level, weakened.
 
 **The boundary hooks are not optional decoration.** The workflow's correctness rests on three things
 belonging to the Architect alone — the commits, the ticked boxes, and the decision to invoke an agent —
-and prose alone does not hold them: a worker that has just finished a block will sometimes tick its own
-tasks and commit its own work, which lands code no gate ever ran. Generate the hooks, and keep the
+and prose alone does not hold them: a worker that has just finished a section will sometimes tick its
+own tasks and commit its own work, which lands code no gate ever ran. Generate the hooks, and keep the
 `disallowedTools` and `hooks:` frontmatter in every agent file exactly as the templates set it.
 
 The skill does **not** install OpenSpec, the `/opsx:*` commands, or the `openspec-*` skills — those come
@@ -51,7 +55,8 @@ from the `openspec` CLI (`openspec init`). It only produces the orchestration la
 Scaffold is the **third** step of the greenfield chain: **`/dmons:discovery`** (the Analyst gathers
 requirements — the *what*) → **`/dmons:architecture`** (the Architect decides the technology — the
 *how*, recorded in each change's `design.md ## Decisions` and any ADRs) → **`/dmons:scaffold`** (this
-skill, which audits those decisions to generate the Apply Workflow agents). By the time scaffold runs the
+skill, which audits those decisions to generate the Apply Workflow agents) → **`/dmons:implementation`**
+(the build, section by section, which reads what this skill generates). By the time scaffold runs the
 project should already have at least one change carrying the decisions the agents will enforce; if it
 doesn't, that's the signal to run discovery and architecture first (see Step 1).
 
@@ -164,34 +169,28 @@ workflow will never run.
   web component each break in different ways. Name the hazards that are actually true here, mined from
   the design decisions and specs — don't paste a generic checklist.
 - Project type → the supervisor's **architectural coherence** list, which is a *different* cut of the
-  same project. Ask "what erodes here across several blocks that no single block's diff would show?" —
-  public API surface consistency for a library; contract/versioning stability and unevenly-applied
-  cross-cutting concerns for a service; tool-surface and permission-boundary coherence for an agent;
-  the stack seam (does the frontend's assumed contract match the backend block that shipped?) for a
-  multi-stack repo. **These bullets must not duplicate the reviewer's** — if a bullet is checkable from
-  one diff, it belongs to the reviewer.
+  same project. Ask "what erodes here across a whole change that no single section's diff would
+  show?" — public API surface consistency for a library; contract/versioning stability and
+  unevenly-applied cross-cutting concerns for a service; tool-surface and permission-boundary coherence
+  for an agent; the stack seam (does the frontend's assumed contract match the backend section that
+  shipped?) for a multi-stack repo. **These bullets must not duplicate the reviewer's** — if a bullet is
+  checkable from one section's diff, it belongs to the reviewer.
 
-## Step 3 — The two-level unit model (section → block)
+## Step 3 — The unit of work is the section
 
-The workflow has **two** levels; the templates already bake this in, but you must fill the section term
-correctly:
+OpenSpec `tasks.md` groups tasks under `## N.` headings, and **that container is the workflow's unit of
+work**: one worker brief, one review, one gate run, one commit per `## N.`. There is nothing finer —
+0.5.x's *block* (a run of tasks within a section) is retired, and must not reappear in generated text.
 
-- **Section = the `## N.` container.** OpenSpec `tasks.md` groups tasks under `## N.` headings. Repos
-  call this container either a **"section"** or a **"group"** — look at how the existing `tasks.md` /
-  `design.md` refer to it and match that; default to **"section"** with no signal. This term fills
-  every `{{UNIT}}` slot consistently across all files. The Architect walks sections **in order**.
-- **Block = the unit of work.** A **block** is a coherent run of tasks *within one section* (e.g.
-  `N.1–N.3`) that the Architect judges to be one sensible deliverable for a worker to build, the
-  reviewer to review, and one commit to land. **"block" is a fixed term** — it is not templated and
-  does not vary per repo; leave every literal "block" in the templates as-is. A section is one or more
-  blocks; a block never spans sections; with per-stack workers a block is single-stack.
+Repos call the container either a **"section"** or a **"group"** — look at how the existing `tasks.md` /
+`design.md` refer to it and match that; default to **"section"** with no signal. This term fills every
+`{{UNIT}}` slot, and the `unit:` key of the `# dmons-config` block, consistently across all files.
 
-So: `{{UNIT}}` = the section container's name (section/group); "block" stays "block" everywhere.
-
-**The two levels map onto the two auditors**, which is why getting `{{UNIT}}` right matters: the
-`reviewer` audits a **block**, the `supervisor` audits a **{{UNIT}}**. Every file uses the `{{UNIT}}`
-slot for the container — keep the term identical across `CLAUDE.md`, the worker(s), the reviewer, and
-the supervisor, or the generated agents will disagree about what they are reviewing.
+**The unit maps onto the two auditors**, which is why getting `{{UNIT}}` right matters: the `reviewer`
+audits a **{{UNIT}}**, the `supervisor` audits the **change**. Keep the term identical across
+`CLAUDE.md`, the worker(s), the reviewer, and the supervisor, or the generated agents will disagree
+about what they are reviewing — and `/dmons:implementation` will write posts in a term the agents don't
+use.
 
 ## Step 4 — Confirm gaps with the user
 
@@ -238,7 +237,8 @@ Key slots and where they come from:
 | `{{PROJECT_NAME}}`, `{{PROJECT_DESCRIPTION}}`, `{{PROJECT_DESCRIPTION_SHORT}}` | `project.md`, specs |
 | `{{TECH_STACK}}`, `{{ENGINEER_STRENGTHS}}`, `{{LANG}}`, `{{LANG_IDIOMS}}`, `{{STYLE_BULLETS}}` | detected language + conventions |
 | `{{UNIT}}` | Step 3 — the section container's name (section/group) |
-| `{{WORKER_NAME}}`, `{{STACK}}`, `{{WORKER_STACK_LINE}}`, `{{WORKER_ROLE_LINES}}`, `{{BLOCK_STACK_RULE}}` | Step 4 worker roster (see the multi-stack note below the table) |
+| `{{WORKER_NAME}}`, `{{STACK}}`, `{{WORKER_STACK_LINE}}`, `{{WORKER_ROLE_LINES}}`, `{{WORKER_CONFIG_LINES}}` | Step 4 worker roster (see the multi-stack note below the table) |
+| `{{FORMAT_CONFIG_LINE}}`, `{{LINT_CONFIG_LINE}}`, `{{EVERY_STACK_CONFIG_LINE}}` | the `# dmons-config` block's optional gate keys — present only when the Makefile defines that target; delete the line otherwise |
 | `{{RAW_BUILD_CMD}}`, `{{RAW_TEST_CMD}}`, `{{RAW_FORMAT_CMD}}`, `{{RAW_LINT_CMD}}`, `{{RAW_PUBLISH_CMD}}`, `{{RAW_CLEAN_CMD}}` | Step 2's detected raw commands — **`Makefile` only**. No other generated file ever names a toolchain command |
 | `{{PROJECT_NAME}}`, `{{PRIMARY_STACK}}`, `{{PHONY_LIST}}`, `{{PRIMARY_GATE_TARGETS}}` | the stack names and target set settled in Step 2/4 |
 | `{{EXIT_RATIONALE_EXAMPLE}}` | *optional* — one concrete sentence naming a tool in **this** project that exits non-zero while printing innocuous output (e.g. "`dotnet format --verify-no-changes` exits 2 while printing a single `warning: IDEnnnn` line"). Delete if the audit found no such case; don't invent one |
@@ -246,25 +246,31 @@ Key slots and where they come from:
 | `{{EXTRA_STACK_COMMAND_LINES}}` | multi-stack only — one `CLAUDE.md` command line per additional stack's gate set, plus `make gates-all` |
 | `{{BINDING_DECISIONS}}`, `{{DECISIONS_HEADING}}`, `{{DECISIONS_NOUN}}` | change `design.md` `## Decisions` + ADRs |
 | `{{ADR_CONTEXT_LINES}}`, `{{ADR_STOP_CLAUSE}}`, `{{COMPLIANCE_NOUN}}` | whether ADRs exist (ADRs → "ADR"; else "design-decision") |
-| `{{DOMAIN_HAZARDS}}`, `{{DOMAIN_HAZARDS_HEADING}}`, `{{DOMAIN_QUALITY}}` | project type + specs (multi-stack: each stack's hazards under its own sub-bullet) |
-| `{{HITL_EXAMPLES}}` | the change's human-verification tasks (real-terminal behaviour, interactive prompts, etc.) |
-| `{{WORKER_DESCRIPTION}}`, `{{REVIEWER_DESCRIPTION}}` | compose: role + project + tech (+ the stack a per-stack worker owns) + task areas + handoff |
-| `{{SUPERVISOR_DESCRIPTION}}` | compose: {{UNIT}}-level auditor + project + what it catches that block review can't + when it runs (after a {{UNIT}}'s last block lands) |
+| `{{DOMAIN_HAZARDS}}`, `{{DOMAIN_HAZARDS_HEADING}}` | project type + specs (multi-stack: each stack's hazards under its own sub-bullet) |
+| `{{HITL_EXAMPLES}}` | the change's human-verification tasks (real-terminal behaviour, interactive prompts, etc.) — in the worker and the config block |
+| `{{WORKER_DESCRIPTION}}`, `{{REVIEWER_DESCRIPTION}}` | compose: role + project + tech (+ the stack a per-stack worker owns) + task areas + handoff. The reviewer's says it audits each whole {{UNIT}} before it lands |
+| `{{SUPERVISOR_DESCRIPTION}}` | compose: change-level auditor + project + what it catches that a {{UNIT}} review can't + when it runs (once, after every {{UNIT}} of the change has landed) |
 | `{{SUPERVISOR_TITLE}}` | a rung above `{{PRINCIPAL_TITLE}}` — e.g. "Staff Engineer" / "Principal Architect" to the reviewer's "Principal Engineer" |
-| `{{ARCHITECTURAL_COHERENCE_BULLETS}}` | Step 2 — the cross-block structural hazards; **must not restate the reviewer's `{{DOMAIN_HAZARDS}}`** |
+| `{{ARCHITECTURAL_COHERENCE_BULLETS}}` | Step 2 — the structural hazards that accumulate across a whole change; **must not restate the reviewer's `{{DOMAIN_HAZARDS}}`** |
 | `{{GRAPHIFY_TOOL_LINE}}` | present only if `graphify-out/` exists |
-| `{{COAUTHOR_LINE}}` | the repo's existing commit convention, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>` (check `git log`) |
+| `{{COAUTHOR_LINE}}` | the repo's existing commit convention, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>` (check `git log`) — the config block's `coauthor:` value, which `/dmons:implementation` appends to every commit |
 
 **Worker roster (single vs per-stack).** The worker slots depend on the Step 4 answer:
 
 - **Single full-stack worker:** fill `worker.md.template` once with `{{WORKER_NAME}}` = `worker`;
   **delete** the `{{WORKER_STACK_LINE}}` line. In `CLAUDE.md`, `{{WORKER_ROLE_LINES}}` is one bullet
-  (`**` + `` `worker` `` + `** agent — implements each block.`) and `{{BLOCK_STACK_RULE}}` is **deleted**.
+  (`**` + `` `worker` `` + `** agent — implements each {{UNIT}}.`) and `{{WORKER_CONFIG_LINES}}` is one
+  entry: `name: worker`, `stack: all`, `gates: make gates`.
 - **Per-stack workers:** fill `worker.md.template` **once per stack**, writing a separate
   `.claude/agents/worker-<stack>.md`, with `{{WORKER_NAME}}` = `worker-<stack>`, `{{STACK}}` = that
   stack, its own `{{BUILD_CMD}}`/`{{TEST_CMD}}`/idioms/hazards, and the `{{WORKER_STACK_LINE}}` kept. In
-  `CLAUDE.md`, `{{WORKER_ROLE_LINES}}` lists one bullet per worker and `{{BLOCK_STACK_RULE}}` is kept
-  (the single-stack-block routing rule).
+  `CLAUDE.md`, `{{WORKER_ROLE_LINES}}` lists one bullet per worker and `{{WORKER_CONFIG_LINES}}` one
+  entry per worker, each carrying its own stack's gate set (`gates: make gates-web`). How a {{UNIT}}
+  that spans stacks is routed is `/dmons:implementation`'s business, not the config's.
+
+**The `# dmons-config` block is parsed, not read.** `/dmons:implementation` greps for its first line and
+reads the YAML beneath it at every invocation. Keep it valid YAML, keep every key, and keep its values
+agreeing with the prose above it — the Commands section and the config name the same targets.
 
 When ADRs do **not** exist, set `{{COMPLIANCE_NOUN}}` → "design-decision", `{{DECISIONS_NOUN}}` →
 "binding design decisions", `{{DECISIONS_NOUN_SINGULAR}}` → "binding design decision", and make
@@ -331,8 +337,10 @@ Write both scripts to `.claude/hooks/`, stripped of their `#!!` lines and otherw
 - `dmons-tripwire.sh` — the before/after check around each agent's **run**, not around the Architect's
   Agent call: agents run in the background, so the call returns at launch and a `PreToolUse`/`PostToolUse`
   pair around it measures an empty window. It brackets `SubagentStart`/`SubagentStop` instead and reports
-  on `Stop`. Wired in **`.claude/settings.json`**, because the reporting half has to run in the
-  Architect's own session — that is the only session it is allowed to speak into.
+  on `Stop`. Its fourth mode, `boundary`, runs on `PostToolUse` for `Bash` and injects a one-line
+  reminder after each of the Architect's commits to re-invoke `/dmons:implementation` — the reminder,
+  never the procedure. Wired in **`.claude/settings.json`**, because the reporting and reminding halves
+  have to run in the Architect's own session — that is the only session they are allowed to speak into.
 
 Four things to get right, in order:
 
@@ -351,12 +359,16 @@ Four things to get right, in order:
        "SubagentStop":  [ { "matcher": "^(worker|worker-.+|reviewer|supervisor)$", "hooks": [ { "type": "command",
            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/dmons-tripwire.sh\" stop" } ] } ],
        "Stop":          [ { "hooks": [ { "type": "command",
-           "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/dmons-tripwire.sh\" report" } ] } ]
+           "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/dmons-tripwire.sh\" report" } ] } ],
+       "PostToolUse":   [ { "matcher": "Bash", "hooks": [ { "type": "command",
+           "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/dmons-tripwire.sh\" boundary" } ] } ]
    } }
    ```
-   The matcher is a regex over the **agent type** — the `name:` in each agent file's frontmatter, not the
-   filename. If you generated workers under other names, widen the alternation to match and say which
-   names you used; a matcher that misses is silent. `Stop` takes no matcher.
+   The `SubagentStart`/`SubagentStop` matcher is a regex over the **agent type** — the `name:` in each
+   agent file's frontmatter, not the filename. If you generated workers under other names, widen the
+   alternation to match and say which names you used; a matcher that misses is silent. `Stop` takes no
+   matcher. The `PostToolUse` matcher is the tool name; the script itself ignores everything but the
+   Architect's own successful `git commit`, and stays silent when no change is in flight.
    Add `.claude/.dmons-tripwire/` to `.gitignore` — that's the scratch directory it snapshots into.
    Declining this is fine: the guard still does the preventing. Say which half they now have.
 4. **Frontmatter hooks need the workspace trusted.** Claude Code skips a project-level agent's
@@ -397,8 +409,8 @@ yours to stamp.
 
 `<version>` is the `version` field from the plugin's `plugin.json`. Place it **immediately after the
 `OpenSpec Workflow` heading** in `CLAUDE.md` — at whatever level you wrote that heading; when merging
-into an existing file you'll usually demote it to `##` under the project's own H1, and the `## 1.`…
-`## 5.` sub-headings to `###` to match. That heading marks the region this skill owns; the rest of the
+into an existing file you'll usually demote it to `##` under the project's own H1, and its `##`
+sub-headings (Roles, The implementation phase, Stop and ask, Workflow configuration) to `###` to match. That heading marks the region this skill owns; the rest of the
 file may be the project's own, or another generator's. Put the stamp for each agent file **immediately
 after the closing `---` of the frontmatter**.
 
@@ -418,25 +430,30 @@ rather than read the log — it's the part of this setup a Product Owner won't g
 gate targets were allowlisted in `.claude/settings.json`, and that `publish`/`clean` were deliberately
 left out so they still prompt. If they skipped the
 Makefile, say the agents are wired to raw commands instead and that `/dmons:update-scaffold` can offer
-it again later. Then tell the user the next step: run `/opsx:apply` (or `/opsx:propose` to create a
-change first), and the Analyst/Architect will drive it **{{UNIT}} by {{UNIT}}, block by block** —
-delegating each block to a `worker` and the `reviewer`, then each finished {{UNIT}} to the
-`supervisor`, all through the shared `DEVLOG.md`.
+it again later. Then tell the user the next step: run `/dmons:implementation` (or `/opsx:propose` to
+create a change first), and the Analyst/Architect will drive it **{{UNIT}} by {{UNIT}}** — each
+{{UNIT}} briefed to a `worker`, audited by the `reviewer`, gated and committed, then the whole change
+audited once by the `supervisor`, all through the shared `DEVLOG.md`. Say plainly that the procedure now
+lives in the plugin: `CLAUDE.md` tells the Architect to invoke the skill at every {{UNIT}} boundary, and
+anyone running the implementation phase on this repo needs the `dmons` plugin installed.
 
 Report the **boundary hooks** plainly, because they change what the agents can physically do:
 
 - what the guard blocks (git writes, `tasks.md`, the `Makefile`, `CLAUDE.md`/`.claude/`, spawning
   agents — across Bash *and* the `ctx_*` tools), that the auditors can write only `DEVLOG.md`, and that
   none of it constrains the Architect;
-- whether they took the tripwire, and that without it they have prevention but no detection;
+- whether they took the tripwire, and that without it they have prevention but no detection — and no
+  post-commit reminder to re-invoke `/dmons:implementation`, so the loop's control flow rests on prose
+  alone;
 - that both need `jq`, and that the guard fails closed without it;
 - **the 30-second verification**, which is worth doing once: ask a worker to commit something. It
   should come back with `BLOCKED by the OpenSpec Apply Workflow` rather than a commit. If it commits,
   the frontmatter hooks are being skipped — almost always an untrusted workspace or a missing execute
   bit — and every agent is running unguarded.
 
-Mention the cost shape explicitly, since it's the thing they'll feel: worker and reviewer are sonnet
-and run per block; the supervisor is opus and runs once per {{UNIT}} (twice if it requests changes).
+Mention the cost shape explicitly, since it's the thing they'll feel: the worker is sonnet and runs once
+per {{UNIT}}; the reviewer is opus and runs once per {{UNIT}} (plus once per remediation pass); the
+supervisor is opus and runs once per change (again after each remediation pass).
 
 Note the version you stamped, and that a later plugin release is applied with `/dmons:update-scaffold`
 rather than by re-running this skill.
@@ -462,11 +479,15 @@ rather than by re-running this skill.
   drop whatever the project had already approved.
 - Always strip template comments and unused optional lines from the generated files — `<!-- ... -->`
   everywhere, `#!!` lines in the `Makefile`, whose plain `#` comments stay.
-- The generated CLAUDE.md's "OpenSpec Workflow" section is authoritative and must keep its
-  structure — tailor the commands, nouns, and worker roster, not the workflow shape (Analyst/Architect
-  + Product Owner roles, the two nested loops, the {{UNIT}} review that closes the outer one, shared
-  DEVLOG).
-- Keep the models as the templates set them: `worker` sonnet, `reviewer` sonnet, `supervisor` opus.
+- The generated CLAUDE.md's "OpenSpec Workflow" section must keep its structure — tailor the commands,
+  nouns, and worker roster, not the workflow shape (Analyst/Architect + Product Owner roles, the
+  instruction to invoke `/dmons:implementation` at every {{UNIT}} boundary, the `# dmons-config`
+  block, shared DEVLOG). Keep its **authority clause split by kind** — `CLAUDE.md` for project facts,
+  roles, and boundaries; `/dmons:implementation` for the procedure. A blanket "this document is
+  authoritative" tells the Architect to prefer a stale copy of the loop over the live one.
+- **Never write the implementation procedure into `CLAUDE.md`.** It lives in the plugin. A generated
+  file that re-grows the loop's steps is a second copy that will drift from the first.
+- Keep the models as the templates set them: `worker` sonnet, `reviewer` opus, `supervisor` opus.
 - **Copy the hook scripts verbatim and never soften one.** They carry no audited values, so there is
   nothing to tailor; a repo-specific guard is a guard with repo-specific holes. If one blocks something
   an agent genuinely needs, that's a question for the Product Owner and a fix upstream in the plugin,
@@ -476,12 +497,12 @@ rather than by re-running this skill.
   precisely the review it was meant not to have.
 - **`chmod +x` is part of writing the hooks**, not an afterthought. A non-executable guard blocks
   nothing and says nothing; the workflow looks identical right up until an agent commits.
-- Keep the reviewer diff-local and the supervisor cross-block. If you find yourself writing the same
-  check into both files, it belongs in the reviewer only — a supervisor that re-runs block review is
-  an expensive no-op, which is the main way this workflow degrades.
-- The `{{UNIT}}` base-commit post (`**[architect]** Base: <sha> — …`) is how the supervisor gets its
-  review scope. Keep it in the generated CLAUDE.md's DEVLOG conventions **and** in §3a; dropping it
-  leaves the supervisor unable to see the {{UNIT}}.
+- Keep the reviewer {{UNIT}}-local and the supervisor change-level. If you find yourself writing the
+  same check into both files, it belongs in the reviewer only — a supervisor that re-runs the {{UNIT}}
+  review is an expensive no-op, which is the main way this workflow degrades.
+- The `{{UNIT}}` base-commit post (`**[architect]** Base: <sha> — …`) is how both auditors get their
+  scope — the reviewer from the {{UNIT}}'s own, the supervisor from the first. Keep it in the generated
+  CLAUDE.md's DEVLOG conventions; dropping it leaves both reviews without a boundary.
 - **Always stamp** (Step 6). An unstamped file forces the next update to feature-detect its version,
   which gets less reliable with every release.
 - This skill **generates**; it does not migrate. If the repo is already scaffolded, that's

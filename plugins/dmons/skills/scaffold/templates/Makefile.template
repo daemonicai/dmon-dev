@@ -104,12 +104,12 @@ gates:
 #!! <TAB>@$(MAKE) --no-print-directory -k build test format web-build web-test web-lint validate; code=$$?; \
 #!! <TAB>echo "GATES_ALL_EXIT:$$code"; exit $$code
 #!!
-#!! Every stack's set includes `validate` — the spec gate belongs to every block, whatever stack
-#!! it was. Delete this block for a single-stack project.
+#!! Every stack's set includes `validate` — the spec gate belongs to every section, whatever
+#!! stack it was. Delete this block for a single-stack project.
 
 # --- release & housekeeping ----------------------------------------------------
 
-# Not gates. `publish` is the Product Owner's to run — no agent invokes it as part of a block.
+# Not gates. `publish` is the Product Owner's to run — no agent invokes it as part of the loop.
 publish:
 	@{{RAW_PUBLISH_CMD}}; code=$$?; echo "PUBLISH_EXIT:$$code"; exit $$code
 
